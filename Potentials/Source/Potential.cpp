@@ -1,0 +1,11 @@
+#include "Potential.hpp"
+
+/////////////////////////////////////////  Constructors/Destructors  ////////////////////////////////////////////////
+
+Potential::Potential()
+{
+}
+
+Potential::~Potential()
+{
+}

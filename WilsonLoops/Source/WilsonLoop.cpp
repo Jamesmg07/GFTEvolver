@@ -1,0 +1,11 @@
+#include "WilsonLoop.hpp"
+
+/////////////////////////////////////////////  Constructors/Destructors  /////////////////////////////////////////
+
+WilsonLoop::WilsonLoop()
+{
+}
+
+WilsonLoop::~WilsonLoop()
+{
+}

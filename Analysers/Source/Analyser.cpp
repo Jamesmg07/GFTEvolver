@@ -1,0 +1,11 @@
+#include "Analyser.hpp"
+
+/////////////////////////////////////////  Constructors/Destructors  ////////////////////////////////////////////////
+
+Analyser::Analyser()
+{
+}
+
+Analyser::~Analyser()
+{
+}

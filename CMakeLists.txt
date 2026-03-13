@@ -1,0 +1,78 @@
+cmake_minimum_required(VERSION "3.10")
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+#Enable all standard build types
+set(CMAKE_CONFIGURATION_TYPES "Debug;Release;RelWithDebInfo;MinSizeRel" CACHE STRING "" FORCE)
+
+# Default to Release build if not specified
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  set(CMAKE_BUILD_TYPE Release CACHE STRING
+      "Choose the type of build (Debug, Release, RelWithDebInfo, MinSizeRel)." FORCE)
+endif()
+
+project(GFTEvolver)
+
+# Include path
+set(PROJECT_HEADERS_DIR "${CMAKE_SOURCE_DIR}/Header")
+
+
+# -----------------------------
+# Sources
+# -----------------------------
+set(
+  SOURCES
+  "Source/main.cpp"
+  "Source/Lattice.cpp"
+  "Source/Model.cpp"
+)
+
+add_executable(GFTEvolver ${SOURCES})
+
+if (MSVC)
+    target_compile_options(GFTEvolver PRIVATE
+        $<$<CONFIG:Debug>:/W4 /permissive- /Od>
+        $<$<CONFIG:Release>:/W4 /permissive- /O3>
+    )
+else()
+    target_compile_options(GFTEvolver PRIVATE
+        $<$<CONFIG:Debug>: -Wall -Wextra -Wpedantic -Wno-ignored-qualifiers -Wfloat-conversion -Wsign-compare -Wconversion -O0 -g>
+        $<$<CONFIG:Release>: -O3>
+        $<$<CONFIG:RelWithDebInfo>: -Wall -Wextra -Wpedanctic -Wno-ignored-qualifiers -Wsign-compare -Wconversion -O3>
+    )
+endif()
+
+# Create macro for the source directory
+target_compile_definitions(GFTEvolver PRIVATE
+    SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+)
+
+
+# -----------------------------
+# Subdirectories (modules)
+# -----------------------------
+
+add_subdirectory(Potentials)
+add_subdirectory(Gradients)
+add_subdirectory(WilsonLoops)
+add_subdirectory(InitialConditions)
+add_subdirectory(BoundaryConditions)
+add_subdirectory(Analysers)
+
+# -----------------------------
+# Header files set-up
+# -----------------------------
+
+target_include_directories(GFTEvolver PRIVATE ${PROJECT_HEADERS_DIR})
+
+# -----------------------------
+# Linking
+# -----------------------------
+
+target_link_libraries(GFTEvolver PRIVATE
+    Potentials
+    Gradients
+    WilsonLoops
+    InitialConditions
+    BoundaryConditions
+    Analysers)

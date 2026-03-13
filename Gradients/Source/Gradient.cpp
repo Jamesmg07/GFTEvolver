@@ -1,0 +1,11 @@
+#include "Gradient.hpp"
+
+//////////////////////////////////////////  Constructors/Destructors  ///////////////////////////////////////////
+
+Gradient::Gradient()
+{
+}
+
+Gradient::~Gradient()
+{
+}
