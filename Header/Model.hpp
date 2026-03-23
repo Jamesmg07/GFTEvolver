@@ -118,8 +118,10 @@ public:
 
     /*
      * Set up for the energy calculation. Only runs if energy analyser is being used.
+     *
+     * @param        bool store_energy                Boolean that determines whether energy calculations should be performed during the evolution loop.
      */
-    void energyPreparation() const;
+    void energyPreparation(const bool store_energy) const;
 
     /*
      * Updates internal parameters relating to the evolution that affect how evolution works, e.g damping.
@@ -188,7 +190,7 @@ public:
      * @param        vector<vector<float*>> &vector_pointers                Array of pointers to the vector fields at the required grid positions.
      * @param        float* local_vector_fields[2]                          Pointers to vector fields at this location, for both timesteps.
      */
-    void calcYangMillsContributions(const std::vector<std::vector<const float*>> &vector_pointers, const float* const local_vector_fields[2]);
+    void calcYangMillsContributions(const std::vector<std::vector<const float*>> &vector_pointers, const float* const local_vector_fields[2], long long unsigned index);
 
     /*
      * Calculates the magnetic energy associated with the fields at this position.

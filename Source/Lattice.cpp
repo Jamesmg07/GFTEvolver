@@ -635,7 +635,7 @@ void Lattice::evolve()
                     // Process different contributions to the equations of motion.
                     this->model.calcPotentialContributions(local_scalar_pointers[1]);
                     this->model.calcGradientContributions(scalar_pointers, vector_pointers);
-                    this->model.calcYangMillsContributions(vector_pointers, local_vector_pointers);    
+                    this->model.calcYangMillsContributions(vector_pointers, local_vector_pointers, 1ULL*((x_iter*this->ny + y_iter)*this->nz + z_iter));    
 
                     // Run all continous analyser functions that need to happen at every location in the grid.
                     // Do this before evolution so that field values have not been overwritten yet.

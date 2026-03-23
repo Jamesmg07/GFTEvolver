@@ -205,9 +205,9 @@ float WilsonLoops::StandardModel::getSqrCouplings(const unsigned comp_iter) cons
 }
 
 
-void WilsonLoops::StandardModel::energyPreparation()
+void WilsonLoops::StandardModel::energyPreparation(const bool store_energy)
 {
-    this->storeEnergy = true;
+    this->storeEnergy = store_energy;
     this->storedMagneticEnergy = 0.f;
     this->storedElectricEnergy = 0.f;
 }
@@ -237,12 +237,17 @@ float WilsonLoops::StandardModel::calcElectricEnergy(const float *const local_ve
 }
 
 
-std::vector<double> WilsonLoops::StandardModel::calcMagneticContributions(const std::vector<std::vector<const float *>> &vector_pointers) const
+std::vector<double> WilsonLoops::StandardModel::calcMagneticContributions(const std::vector<std::vector<const float *>> &vector_pointers, long long unsigned index) const
 {
     // WARNING:: THIS CURRENTLY ASSUMES THAT THE STENCIL BEING USED IS ALWAYS 3-POINT. WILL NEED TO MAKE SOME ALTERATIONS TO GET IT TO WORK FOR
     // OTHER STENCILS!
 
     std::vector<double> contribution(12, 0.f);
+
+    // if ( index == 64ULL || index == 65ULL )
+    // {
+    //     std::cout << "\n" << std::endl;
+    // }
 
     for (unsigned dir1_iter = 0; dir1_iter < 3; dir1_iter++) // This loops over the components which will be evolved
     {
@@ -276,7 +281,6 @@ std::vector<double> WilsonLoops::StandardModel::calcMagneticContributions(const 
                                              + static_cast<double>(vector_pointers[dir2_iter][0][dir2_index]) + static_cast<double>(vector_pointers[dir1_iter][1][dir1_index]);
 
                 contribution[eq_dir_index] += ( std::sin( local_loop_angle ) - std::sin( neighbour_loop_angle ) )*inverse_sqr_spacings[dir2_iter];
-
 
                 // Isospin SU(2) calculations:
 
@@ -319,21 +323,31 @@ std::vector<double> WilsonLoops::StandardModel::calcMagneticContributions(const 
                     contribution[eq_dir_index + comp_iter] += ( U_product1[comp_iter] - U_product2[comp_iter] )*inverse_sqr_spacings[dir2_iter];
 
 
+                // if ( index == 64ULL || index == 65ULL )
+                // {
+                //     std::cout << "BEFORE: " << index << " " << dir1_iter << " " << dir2_iter << " " << this->storedMagneticEnergy << std::endl;
+                // }
+
                 // If energy is being calculated, do some additional calculations now so that wilson loops don't need to be recalculated.
                 if (this->storeEnergy)
                     this->storedMagneticEnergy += 2.0*this->inverse_sqr_spacings[dir1_iter]*this->inverse_sqr_spacings[dir2_iter]*(
-                    //    this->inverse_g_sqr*(1.0 - U_product1[0]) 
+                        this->inverse_g_sqr*(1.0 - U_product1[0]) 
                       + this->inverse_gp_sqr*(1.0 - std::cos(local_loop_angle))
                     );
 
                 if (this->storedMagneticEnergy < 0)
                     std::cout << 1.0 - U_product1[0] << std::endl;
 
+
+                // if ( index == 64ULL || index == 65ULL )
+                // {
+                //     std::cout << "AFTER: " << index << " " << dir1_iter << " " << dir2_iter << " " << this->storedMagneticEnergy << std::endl;
+                // }
+
             }
 
             // Otherwise there is no contribution
         }
-
     }
 
     return contribution;
@@ -376,9 +390,11 @@ std::vector<double> WilsonLoops::StandardModel::calcElectricContributions(const 
         if (this->storeEnergy)
         {
             this->storedElectricEnergy += 4*this->inverse_sqr_spacings[dir_iter]*(
-            //    this->inverse_g_sqr*(1.0 - U_product[0]) 
+                this->inverse_g_sqr*(1.0 - U_product[0]) 
               + this->inverse_gp_sqr*(1.0 - std::cos(loop_angle))
             );
+
+            //this->storedElectricEnergy += 0.5*this->inverse_sqr_spacings[dir_iter]*this->inverse_gp_sqr*pow(loop_angle, 2.0);
         }
 
     }

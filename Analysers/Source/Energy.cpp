@@ -111,7 +111,7 @@ Energy::~Energy()
 
 void Energy::initialAnalysis()
 {
-    this->model.energyPreparation();
+    this->model.energyPreparation(this->globalOutput || this->localOutput);
 }
 
 void Energy::locationAnalysis(const long long unsigned index,
@@ -211,6 +211,8 @@ void Energy::timestepAnalysis(const unsigned &time_step)
     // Check if conditions for global and local output are satisfied
     this->globalOutput = this->anyGlobalOptions && this->counter%this->globalFrequency == 0;
     this->localOutput = this->anyLocalOptions && this->counter%this->localFrequency == 0;
+
+    this->model.energyPreparation(this->globalOutput || this->localOutput);
 }
 
 void Energy::finalAnalysis()

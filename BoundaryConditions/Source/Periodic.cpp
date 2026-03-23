@@ -163,6 +163,7 @@ std::vector<std::vector<const float *>> Periodic::generateVectorPointers(const s
         stencil_pointers[axis_iter][4] = &this->vectorFields[1ULL*this->numVectorComponents*(
             running_indices[axis_iter][2] + ((moduli[1] + locs[1] - 1)%moduli[1] - locs[1])*sub_array_sizes[1]
         )];
+
     }    
 
     return stencil_pointers;
@@ -247,12 +248,12 @@ void Periodic::evolve(const unsigned &t_now, const unsigned &stencil_size)
                 // Process different contributions to the equations of motion.
                 this->model.calcPotentialContributions(local_scalar_pointers[1]);
                 this->model.calcGradientContributions(scalar_pointers, vector_pointers);
-                this->model.calcYangMillsContributions(vector_pointers, local_vector_pointers);      
+                this->model.calcYangMillsContributions(vector_pointers, local_vector_pointers, 1ULL*((x_iter*this->ny + y_iter)*this->nz + z_iter));      
 
                 // Run all continous analyser functions that need to happen at every location in the grid.
                 // Do this before evolution so that field values have not been overwritten yet.
                 for (auto analyser : this->analysers)
-                    analyser->locationAnalysis(1ULL*((x_iter*this->ny + y_iter) + z_iter), local_scalar_pointers, scalar_pointers,
+                    analyser->locationAnalysis(1ULL*((x_iter*this->ny + y_iter)*this->nz + z_iter), local_scalar_pointers, scalar_pointers,
                                                local_vector_pointers, vector_pointers);
 
                 // Last stage is to calculate the fields at the next timestep.

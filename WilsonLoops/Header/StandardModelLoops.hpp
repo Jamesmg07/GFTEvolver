@@ -99,8 +99,10 @@ namespace WilsonLoops{
 
         /*
         * Set up for the energy calculation. Only runs if energy analyser is being used.
+        *
+        * @param        bool store_energy                                      Boolean that decides if energy calculations are performed during evolution.
         */
-        void energyPreparation();
+        void energyPreparation(const bool store_energy);
 
         /*
         * Calculates the energy density coming from the spatial part of both Yang-Mills terms.
@@ -128,7 +130,7 @@ namespace WilsonLoops{
         * 
         * @return       vector<float>                                          Contribution to the vector equations of motion.
         */
-        std::vector<double> calcMagneticContributions(const std::vector<std::vector<const float*>> &vector_pointers) const;
+        std::vector<double> calcMagneticContributions(const std::vector<std::vector<const float*>> &vector_pointers, long long unsigned index) const;
 
         /*
         * Calculates the contribution to the equations of motion coming from half of the temporal part of the Yang-Mills term,

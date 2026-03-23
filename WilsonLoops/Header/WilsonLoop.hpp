@@ -30,8 +30,10 @@ public:
     /*
      * Pure virtual function that must be defined in each child class.
      * Intended use is just to set up for the energy calculation. Only runs if energy analyser is being used.
+     * 
+     * @param        bool store_energy                                      Boolean that determines if energy calculations are performed during evolution.
      */
-    virtual void energyPreparation() = 0;
+    virtual void energyPreparation(const bool store_energy) = 0;
 
     /*
      * Pure virtual function that must be defined in each child class.
@@ -63,7 +65,7 @@ public:
      * 
      * @return       vector<double>                                         Contribution to the vector equations of motion.
      */
-    virtual std::vector<double> calcMagneticContributions(const std::vector<std::vector<const float*>> &vector_pointers) const = 0;
+    virtual std::vector<double> calcMagneticContributions(const std::vector<std::vector<const float*>> &vector_pointers, long long unsigned index) const = 0;
 
     /*
      * Pure virtual function that must be defined in each child class.

@@ -63,7 +63,7 @@ void Model::initGradient(
     case SM_GRADIENT:
 
         this->gradient = new Gradients::StandardModel(num_scalar_components, num_vector_components,
-                                                   nz, ny, nz,
+                                                   nx, ny, nz,
                                                    dt, dx, dy, dz);
         break;
 
@@ -206,10 +206,10 @@ void Model::configure(
     }
 }
 
-void Model::energyPreparation() const
+void Model::energyPreparation(const bool store_energy) const
 {
     if (wilsonLoop)
-        this->wilsonLoop->energyPreparation();
+        this->wilsonLoop->energyPreparation(store_energy);
 }
 
 void Model::update(unsigned time_iter)
@@ -217,7 +217,8 @@ void Model::update(unsigned time_iter)
     if (time_iter < this->ntDamped)
     {
         this->currentDamping = this->dampingFactor;
-        this->evolveGauge = false;
+        //this->evolveGauge = false;
+        this->evolveGauge = true;
     }
     else
     {
@@ -259,11 +260,11 @@ float Model::calcKineticEnergy(const float* const local_scalar_fields[2]) const
     return this->gradient->calcKineticEnergy(local_scalar_fields);
 }
 
-void Model::calcYangMillsContributions(const std::vector<std::vector<const float *>> &vector_pointers, const float *const local_vector_fields[2])
+void Model::calcYangMillsContributions(const std::vector<std::vector<const float *>> &vector_pointers, const float *const local_vector_fields[2], long long unsigned index)
 {
     if (this->wilsonLoop)
     {
-        this->wilsonLoopMagneticContributions = wilsonLoop->calcMagneticContributions(vector_pointers);
+        this->wilsonLoopMagneticContributions = wilsonLoop->calcMagneticContributions(vector_pointers, index);
         this->wilsonLoopElectricContributions = wilsonLoop->calcElectricContributions(local_vector_fields);
     }
 }
@@ -310,7 +311,7 @@ void Model::evolve(float *const local_scalar_fields[2], float *const local_vecto
         std::vector<double> vector_equation_RHS (num_eq_components, 0.f);
         for (unsigned comp_iter = 0; comp_iter < num_eq_components; comp_iter++)
         {
-            vector_equation_RHS[comp_iter] = this->wilsonLoopElectricContributions[comp_iter]
+            vector_equation_RHS[comp_iter] = (1.0 - this->currentDamping*dt)*this->wilsonLoopElectricContributions[comp_iter]
                                         + dt*dt*(this->wilsonLoopMagneticContributions[comp_iter] 
                                         + this->wilsonLoop->getSqrCouplings(comp_iter)*this->currentContributions[comp_iter]);
 
