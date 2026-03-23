@@ -65,7 +65,7 @@ public:
      * 
      * @return       vector<double>                                         Contribution to the vector equations of motion.
      */
-    virtual std::vector<double> calcMagneticContributions(const std::vector<std::vector<const float*>> &vector_pointers, long long unsigned index) const = 0;
+    virtual std::vector<double> calcMagneticContributions(const std::vector<std::vector<const float*>> &vector_pointers) const = 0;
 
     /*
      * Pure virtual function that must be defined in each child class.

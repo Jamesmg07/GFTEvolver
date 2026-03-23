@@ -260,11 +260,11 @@ float Model::calcKineticEnergy(const float* const local_scalar_fields[2]) const
     return this->gradient->calcKineticEnergy(local_scalar_fields);
 }
 
-void Model::calcYangMillsContributions(const std::vector<std::vector<const float *>> &vector_pointers, const float *const local_vector_fields[2], long long unsigned index)
+void Model::calcYangMillsContributions(const std::vector<std::vector<const float *>> &vector_pointers, const float *const local_vector_fields[2])
 {
     if (this->wilsonLoop)
     {
-        this->wilsonLoopMagneticContributions = wilsonLoop->calcMagneticContributions(vector_pointers, index);
+        this->wilsonLoopMagneticContributions = wilsonLoop->calcMagneticContributions(vector_pointers);
         this->wilsonLoopElectricContributions = wilsonLoop->calcElectricContributions(local_vector_fields);
     }
 }

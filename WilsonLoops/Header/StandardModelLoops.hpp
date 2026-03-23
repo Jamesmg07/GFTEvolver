@@ -130,7 +130,7 @@ namespace WilsonLoops{
         * 
         * @return       vector<float>                                          Contribution to the vector equations of motion.
         */
-        std::vector<double> calcMagneticContributions(const std::vector<std::vector<const float*>> &vector_pointers, long long unsigned index) const;
+        std::vector<double> calcMagneticContributions(const std::vector<std::vector<const float*>> &vector_pointers) const;
 
         /*
         * Calculates the contribution to the equations of motion coming from half of the temporal part of the Yang-Mills term,

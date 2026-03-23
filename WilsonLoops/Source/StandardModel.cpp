@@ -237,17 +237,12 @@ float WilsonLoops::StandardModel::calcElectricEnergy(const float *const local_ve
 }
 
 
-std::vector<double> WilsonLoops::StandardModel::calcMagneticContributions(const std::vector<std::vector<const float *>> &vector_pointers, long long unsigned index) const
+std::vector<double> WilsonLoops::StandardModel::calcMagneticContributions(const std::vector<std::vector<const float *>> &vector_pointers) const
 {
     // WARNING:: THIS CURRENTLY ASSUMES THAT THE STENCIL BEING USED IS ALWAYS 3-POINT. WILL NEED TO MAKE SOME ALTERATIONS TO GET IT TO WORK FOR
     // OTHER STENCILS!
 
     std::vector<double> contribution(12, 0.f);
-
-    // if ( index == 64ULL || index == 65ULL )
-    // {
-    //     std::cout << "\n" << std::endl;
-    // }
 
     for (unsigned dir1_iter = 0; dir1_iter < 3; dir1_iter++) // This loops over the components which will be evolved
     {
@@ -323,11 +318,6 @@ std::vector<double> WilsonLoops::StandardModel::calcMagneticContributions(const 
                     contribution[eq_dir_index + comp_iter] += ( U_product1[comp_iter] - U_product2[comp_iter] )*inverse_sqr_spacings[dir2_iter];
 
 
-                // if ( index == 64ULL || index == 65ULL )
-                // {
-                //     std::cout << "BEFORE: " << index << " " << dir1_iter << " " << dir2_iter << " " << this->storedMagneticEnergy << std::endl;
-                // }
-
                 // If energy is being calculated, do some additional calculations now so that wilson loops don't need to be recalculated.
                 if (this->storeEnergy)
                     this->storedMagneticEnergy += 2.0*this->inverse_sqr_spacings[dir1_iter]*this->inverse_sqr_spacings[dir2_iter]*(
@@ -337,12 +327,6 @@ std::vector<double> WilsonLoops::StandardModel::calcMagneticContributions(const 
 
                 if (this->storedMagneticEnergy < 0)
                     std::cout << 1.0 - U_product1[0] << std::endl;
-
-
-                // if ( index == 64ULL || index == 65ULL )
-                // {
-                //     std::cout << "AFTER: " << index << " " << dir1_iter << " " << dir2_iter << " " << this->storedMagneticEnergy << std::endl;
-                // }
 
             }
 

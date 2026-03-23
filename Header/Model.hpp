@@ -190,7 +190,7 @@ public:
      * @param        vector<vector<float*>> &vector_pointers                Array of pointers to the vector fields at the required grid positions.
      * @param        float* local_vector_fields[2]                          Pointers to vector fields at this location, for both timesteps.
      */
-    void calcYangMillsContributions(const std::vector<std::vector<const float*>> &vector_pointers, const float* const local_vector_fields[2], long long unsigned index);
+    void calcYangMillsContributions(const std::vector<std::vector<const float*>> &vector_pointers, const float* const local_vector_fields[2]);
 
     /*
      * Calculates the magnetic energy associated with the fields at this position.
