@@ -10,6 +10,7 @@ set(
   "${CMAKE_CURRENT_SOURCE_DIR}/Source/Analyser.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/Source/OutputFields.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/Source/Energy.cpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/Source/GaugeCondition.cpp"
 )
 
 # Create a library

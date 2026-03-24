@@ -71,6 +71,16 @@ namespace Gradients{
         float calcKineticEnergy(const float* const local_scalar_fields[2]) const;
 
         /*
+        * This function is not required because there are no constraint equations associated with the gauge fixing in the global case.
+        * It still takes in parameters to match the pure virtual function that may be called.
+        * 
+        * @param        float* local_scalar_fields[2]                           Pointers to scalar fields at this location, for both timesteps.
+        * 
+        * @return       vector<float>                                           Contribution to the constraint equations.
+        */
+        std::vector<float> calcConstraintContributions(const float* const local_scalar_fields[2]) const;
+
+        /*
         * Calculates the contribution to the scalar equations of motion from the gradient energy term.
         * For global derivatives, this is the only contribution.
         * 
@@ -83,8 +93,8 @@ namespace Gradients{
                                             const std::vector<std::vector<const float*>> &vector_pointers) const;
 
         /*
-        * There are no currents in the global case, so this function does nothing in this case.
-        * It still takes in parameters to match the pure virtual function that will be called.
+        * There is no gauge field equations of motion, so this function does nothing because it is not required.
+        * It still takes in parameters to match the pure virtual function that may be called.
         * 
         * @param        vector<vector<float*>> &scalar_pointers                 Array of pointers to the scalar fields at the required grid positions.
         * @param        vector<vector<float*>> &vector_pointers                 Array of pointers to the vector fields at the required grid positions.

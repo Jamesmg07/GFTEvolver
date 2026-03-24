@@ -64,7 +64,8 @@ void WilsonLoops::StandardModel::initVariables()
 
 /////////////////////////////////////////////  Private Functions  //////////////////////////////////////////
 
-std::vector<double> WilsonLoops::StandardModel::getSU2Representation(const float *const vector_pointer, const unsigned dir_index, const bool conjugate) const
+std::vector<double> WilsonLoops::StandardModel::getSU2Representation(const float *const vector_pointer, const long long int dir_index, 
+                                                                     const bool conjugate) const
 {
     std::vector<double> c_representation(4, 0.f);
 
@@ -94,7 +95,7 @@ std::vector<double> WilsonLoops::StandardModel::getSU2Representation(const float
     // Approach when 4 dofs are stored:
 
     c_representation[0] = static_cast<double>(vector_pointer[dir_index + 1]);
-    for (unsigned comp_iter = 2; comp_iter < 5; comp_iter++) // comp_iter starts at 2 because 0 is the hypercharge and 1 the c0 component.
+    for (int comp_iter = 2; comp_iter < 5; comp_iter++) // comp_iter starts at 2 because 0 is the hypercharge and 1 the c0 component.
         c_representation[comp_iter-1] = static_cast<double>(conj_fac*vector_pointer[dir_index + comp_iter]);
 
     return c_representation;
@@ -204,6 +205,11 @@ float WilsonLoops::StandardModel::getSqrCouplings(const unsigned comp_iter) cons
         return this->g_sqr;
 }
 
+unsigned WilsonLoops::StandardModel::getNumberOfConstraintEquations() const
+{
+    // There is one constraint equation for the hypercharge and 3 for the isospin.
+    return 4U;
+}
 
 void WilsonLoops::StandardModel::energyPreparation(const bool store_energy)
 {
@@ -236,6 +242,59 @@ float WilsonLoops::StandardModel::calcElectricEnergy(const float *const local_ve
     return electric_energy_density;
 }
 
+std::vector<float> WilsonLoops::StandardModel::calcConstraintContributions(const long long int &t_future_index, 
+                                                                           const std::vector<std::vector<const float *>> &vector_pointers) const
+{
+    // WARNING:: THIS CURRENTLY ASSUMES THAT THE STENCIL BEING USED IS ALWAYS 3-POINT. WILL NEED TO MAKE SOME ALTERATIONS TO GET IT TO WORK FOR
+    // OTHER STENCILS!
+
+    std::vector<float> contribution(4, 0.f);
+
+    for (unsigned dir_iter = 0; dir_iter < 3; dir_iter++)
+    {
+        // Approach when using 3 dofs:
+        //unsigned dir_index = dir_iter*4;
+
+        // Approach when using 4 dofs:
+        int dir_index = dir_iter*5;
+        long long int future_index = t_future_index + dir_index;
+
+
+        // Hypercharge U(1) calculations:
+        double local_loop_angle = static_cast<double>(vector_pointers[0][1][future_index]) 
+                                - static_cast<double>(vector_pointers[0][1][dir_index]);
+
+        double neighbour_loop_angle = static_cast<double>(vector_pointers[dir_iter][0][t_future_index + dir_index])
+                                    - static_cast<double>(vector_pointers[dir_iter][0][dir_index]);
+
+        contribution[0] += ( std::sin( local_loop_angle ) - std::sin( neighbour_loop_angle ) )*this->inverse_sqr_spacings[dir_iter];
+
+
+        // Isospin SU(2) calculations:
+
+        // Calculate the contribution from the first Wilson loop:
+        // Representation of right-hand matrix
+        std::vector<double> U_product1 = this->getSU2Representation(vector_pointers[0][1], future_index, false);
+
+        // Representation of the left-hand matrix
+        std::vector<double> U_multiply = this->getSU2Representation(vector_pointers[0][1], dir_index, true);
+
+        U_product1 = this->SU2Product(U_multiply, U_product1, false);
+
+
+        // Repeat for the second Wilson loop:
+        std::vector<double> U_product2 = this->getSU2Representation(vector_pointers[dir_iter][0], dir_index, true);
+        U_multiply = this->getSU2Representation(vector_pointers[dir_iter][0], future_index, false);
+
+        U_product2 = this->SU2Product(U_multiply, U_product2, false);
+
+        for (unsigned eq_iter = 1; eq_iter < 4; eq_iter++)
+            contribution[eq_iter] += static_cast<float>( ( U_product1[eq_iter] - U_product2[eq_iter] )*this->inverse_sqr_spacings[dir_iter] );
+
+    }
+
+    return contribution;
+}
 
 std::vector<double> WilsonLoops::StandardModel::calcMagneticContributions(const std::vector<std::vector<const float *>> &vector_pointers) const
 {
@@ -275,7 +334,7 @@ std::vector<double> WilsonLoops::StandardModel::calcMagneticContributions(const 
                 double neighbour_loop_angle = -static_cast<double>(vector_pointers[dir1_iter][diag_index][dir2_index]) - static_cast<double>(vector_pointers[dir2_iter][0][dir1_index])
                                              + static_cast<double>(vector_pointers[dir2_iter][0][dir2_index]) + static_cast<double>(vector_pointers[dir1_iter][1][dir1_index]);
 
-                contribution[eq_dir_index] += ( std::sin( local_loop_angle ) - std::sin( neighbour_loop_angle ) )*inverse_sqr_spacings[dir2_iter];
+                contribution[eq_dir_index] += ( std::sin( local_loop_angle ) - std::sin( neighbour_loop_angle ) )*this->inverse_sqr_spacings[dir2_iter];
 
                 // Isospin SU(2) calculations:
 
@@ -315,7 +374,7 @@ std::vector<double> WilsonLoops::StandardModel::calcMagneticContributions(const 
 
                 // Add results to the contributions to the isospin equations
                 for (unsigned comp_iter = 1; comp_iter < 4; comp_iter++)
-                    contribution[eq_dir_index + comp_iter] += ( U_product1[comp_iter] - U_product2[comp_iter] )*inverse_sqr_spacings[dir2_iter];
+                    contribution[eq_dir_index + comp_iter] += ( U_product1[comp_iter] - U_product2[comp_iter] )*this->inverse_sqr_spacings[dir2_iter];
 
 
                 // If energy is being calculated, do some additional calculations now so that wilson loops don't need to be recalculated.

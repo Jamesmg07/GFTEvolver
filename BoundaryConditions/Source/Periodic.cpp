@@ -245,21 +245,32 @@ void Periodic::evolve(const unsigned &t_now, const unsigned &stencil_size)
                 // Also adds the final z contribution and the extras needed for the wilson loops.
                 std::vector<std::vector<const float*>> vector_pointers = this->generateVectorPointers(z_running_indices, x_iter, y_iter, z_iter);
 
+
                 // Process different contributions to the equations of motion.
                 this->model.calcPotentialContributions(local_scalar_pointers[1]);
                 this->model.calcGradientContributions(scalar_pointers, vector_pointers);
                 this->model.calcYangMillsContributions(vector_pointers, local_vector_pointers);      
 
-                // Run all continous analyser functions that need to happen at every location in the grid.
-                // Do this before evolution so that field values have not been overwritten yet.
+                // Run all analyser functions that need to happen at every location in the grid, before the fields are evolved.
+                // These analysers have access to the past and present timesteps.
                 for (auto analyser : this->analysers)
-                    analyser->locationAnalysis(1ULL*((x_iter*this->ny + y_iter)*this->nz + z_iter), local_scalar_pointers, scalar_pointers,
-                                               local_vector_pointers, vector_pointers);
+                    analyser->preEvolveLocationAnalysis(1ULL*((x_iter*this->ny + y_iter)*this->nz + z_iter), 
+                                                        local_scalar_pointers, scalar_pointers,
+                                                        local_vector_pointers, vector_pointers);
 
-                // Last stage is to calculate the fields at the next timestep.
+
+                // Calculate the fields at the next timestep.
                 this->model.evolve(local_scalar_pointers, local_vector_pointers, this->dt,
                                    this->numScalarComponents, this->numVectorComponents);
             
+
+                // Run all analyser functions that need to happen at every location in the grid, after the fields are evolved.
+                // These analysers have access to the present and future timesteps.
+                for (auto analyser : this->analysers)
+                    analyser->postEvolveLocationAnalysis(t_now, 1ULL*((x_iter*this->ny + y_iter)*this->nz + z_iter),
+                                                         local_scalar_pointers, scalar_pointers,
+                                                         local_vector_pointers, vector_pointers);
+
             }
         }
     }

@@ -266,6 +266,27 @@ float Gradients::StandardModel::calcKineticEnergy(const float *const local_scala
     return 0.5f*kinetic_energy;
 }
 
+std::vector<float> Gradients::StandardModel::calcConstraintContributions(const float *const local_scalar_fields[2]) const
+{
+    std::vector<float> contribution(4, 0.f);
+
+    // Hypercharge current
+    contribution[0] = 0.25*( local_scalar_fields[1][0]*local_scalar_fields[0][1] - local_scalar_fields[1][1]*local_scalar_fields[0][0]
+                           + local_scalar_fields[1][2]*local_scalar_fields[0][3] - local_scalar_fields[1][3]*local_scalar_fields[0][2] );
+
+
+    // Isospin currents
+    contribution[1] = 0.25*( local_scalar_fields[1][0]*local_scalar_fields[0][3] - local_scalar_fields[1][1]*local_scalar_fields[0][2]
+                           + local_scalar_fields[1][2]*local_scalar_fields[0][1] - local_scalar_fields[1][3]*local_scalar_fields[0][0]  );
+
+    contribution[2] = 0.25*( -local_scalar_fields[1][0]*local_scalar_fields[0][2] - local_scalar_fields[1][1]*local_scalar_fields[0][3]
+                            + local_scalar_fields[1][2]*local_scalar_fields[0][0] + local_scalar_fields[1][3]*local_scalar_fields[0][1] );
+
+    contribution[3] = 0.25*( local_scalar_fields[1][0]*local_scalar_fields[0][1] - local_scalar_fields[1][1]*local_scalar_fields[0][0]
+                           - local_scalar_fields[1][2]*local_scalar_fields[0][3] + local_scalar_fields[1][3]*local_scalar_fields[0][2] );
+
+    return contribution;
+}
 
 std::vector<double> Gradients::StandardModel::calcDerivatives(const std::vector<std::vector<const float *>> &scalar_pointers,
                                                               const std::vector<std::vector<const float *>> &vector_pointers) const

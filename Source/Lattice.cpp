@@ -36,7 +36,7 @@ void Lattice::configure(const std::string path, const bool debug)
     // Store choices for debug
     std::vector<int> initial_condition_types(2, 0);
     std::vector<int> boundary_condition_types(26, 0);
-    std::vector<bool> analysis_choices(2, false);
+    std::vector<bool> analysis_choices(3, false);
 
     // Read in the parameter values from the configuration file
     std::string description; // Descriptions in the config file (to be dumped)
@@ -82,8 +82,7 @@ void Lattice::configure(const std::string path, const bool debug)
             std::getline(ifs, description, ':');
             ifs >> num_light_crossings;
 
-            this->nt = static_cast<int>( num_light_crossings*nx*dx/(2*dt) );
-            //test
+            this->nt = static_cast<int>( num_light_crossings*static_cast<float>(nx)*dx/(2*dt) );
         }
 
 
@@ -113,6 +112,14 @@ void Lattice::configure(const std::string path, const bool debug)
         analysis_choices[1] = analysis_choice;
         if (analysis_choice)
             this->analysers.push_back( new Energy(this->model, this->dx, this->dy, this->dz, 1ULL*this->nx*this->ny*this->nz) );
+
+        // Output gauge condition violation?
+        std::getline(ifs, description, ':');
+        ifs >> analysis_choice;
+        analysis_choices[2] = analysis_choice;
+        if (analysis_choice)
+            this->analysers.push_back( new GaugeCondition(this->model, this->dx, this->dy, this->dz, 
+                                                          1ULL*this->nx*this->ny*this->nz, this->numVectorFieldComponents) );
 
 
         // Choose boundary condition types
@@ -168,6 +175,7 @@ void Lattice::configure(const std::string path, const bool debug)
 
         std::cout << "\nOutput fields?: " << analysis_choices[0]
                   << "\nOutput energy?: " << analysis_choices[1]
+                  << "\nOutput gauge condition violation?: " << analysis_choices[2]
                   << std::endl;
 
         std::cout << "Report progress?: " << this->progressReport << ", every " << this->reportFrequency << " timesteps.\n" << std::endl;
@@ -355,7 +363,7 @@ std::vector< std::vector<unsigned> > Lattice::determineResponsibilities(const un
 std::vector<std::vector<long long unsigned>> Lattice::updateRunningIndices(std::vector<std::vector<long long unsigned>> running_indices,
                                                                            const unsigned &loc, const unsigned axis) const
 {
-    unsigned stencil_size = (running_indices[0].size()-1)/2;
+    unsigned stencil_size = static_cast<unsigned>((running_indices[0].size()-1)/2ULL);
     long long unsigned sub_array_size;
     if (axis == 0)
         sub_array_size = 1ULL*this->ny*this->nz;
@@ -382,7 +390,7 @@ std::vector<std::vector<long long unsigned>> Lattice::updateRunningIndices(std::
 
 std::vector<std::vector<const float *>> Lattice::generateScalarPointers(const std::vector<std::vector<long long unsigned>> &running_indices) const
 {
-    unsigned array_size = running_indices[0].size();
+    unsigned array_size = static_cast<unsigned>(running_indices[0].size());
     std::vector<std::vector<const float*>> stencil_pointers(3, std::vector<const float*>(array_size, nullptr));
 
     for (unsigned axis_iter = 0; axis_iter < 3; axis_iter++)
@@ -441,7 +449,7 @@ std::vector<std::vector<const float *>> Lattice::generateVectorPointers(const st
     // IN PRINCIPLE I CAN HAVE A DIFFERENT WILSON LOOP STENCIL TO THE DERIVATIVE STENCIL
     // THIS FUNCTION ASSUMES THAT THE WILSON LOOP STENCIL IS THE MOST BASIC TYPE
 
-    unsigned array_size = running_indices[0].size();
+    unsigned array_size = static_cast<unsigned>(running_indices[0].size());
     std::vector<std::vector<const float*>> stencil_pointers(3, std::vector<const float*>(array_size + 2, nullptr));
 
     for (unsigned axis_iter = 0; axis_iter < 3; axis_iter++)
@@ -632,21 +640,32 @@ void Lattice::evolve()
                     // Also adds the final z contribution and the extras needed for the wilson loops.
                     std::vector<std::vector<const float*>> vector_pointers = this->generateVectorPointers(z_running_indices);
 
+
                     // Process different contributions to the equations of motion.
                     this->model.calcPotentialContributions(local_scalar_pointers[1]);
                     this->model.calcGradientContributions(scalar_pointers, vector_pointers);
                     this->model.calcYangMillsContributions(vector_pointers, local_vector_pointers);    
 
-                    // Run all continous analyser functions that need to happen at every location in the grid.
-                    // Do this before evolution so that field values have not been overwritten yet.
+
+                    // Run all analyser functions that need to happen at every location in the grid, before the fields are evolved.
+                    // These analysers have access to the past and present timesteps.
                     for (auto analyser : this->analysers)
-                        analyser->locationAnalysis(1ULL*((x_iter*this->ny + y_iter)*this->nz + z_iter), local_scalar_pointers, scalar_pointers, 
-                                                   local_vector_pointers, vector_pointers);
+                        analyser->preEvolveLocationAnalysis(1ULL*((x_iter*this->ny + y_iter)*this->nz + z_iter), 
+                                                            local_scalar_pointers, scalar_pointers, 
+                                                            local_vector_pointers, vector_pointers);
                     
-                    // Last stage is to calculate the fields at the next timestep.
+
+                    // Calculate the fields at the next timestep.
                     this->model.evolve(local_scalar_pointers, local_vector_pointers, this->dt,
                                        this->numScalarFieldComponents, this->numVectorFieldComponents);
-                    
+
+
+                    // Run all analyser functions that need to happen at every location in the grid, after the fields are evolved.
+                    // These analysers have access to the present and future timesteps.
+                    for (auto analyser : this->analysers)
+                        analyser->postEvolveLocationAnalysis(t_now, 1ULL*((x_iter*this->ny + y_iter)*this->nz + z_iter),
+                                                             local_scalar_pointers, scalar_pointers,
+                                                             local_vector_pointers, vector_pointers);
                     
                 }
             }

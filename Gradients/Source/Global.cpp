@@ -109,6 +109,11 @@ float Gradients::Global::calcKineticEnergy(const float* const local_scalar_field
     return 0.5f*kinetic_energy;
 }
 
+std::vector<float> Gradients::Global::calcConstraintContributions(const float *const local_scalar_fields[2]) const
+{
+    return std::vector<float>();
+}
+
 std::vector<double> Gradients::Global::calcDerivatives(const std::vector<std::vector<const float*>> &scalar_pointers,
                                                        const std::vector<std::vector<const float*>> &vector_pointers) const
 {

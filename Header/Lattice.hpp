@@ -11,6 +11,7 @@
 #include "Analyser.hpp"
 #include "OutputFields.hpp"
 #include "Energy.hpp"
+#include "GaugeCondition.hpp"
 
 #include <chrono>
 

@@ -135,9 +135,18 @@ public:
      * It is assumed that the stencil is symmetric, so ,for example, 1 means that the stencil looks at neighbours
      * that are one lattice site away on both sides.
      * 
-     * @return    vector<unsigned>                The stencil size.
+     * @return        vector<unsigned>                The stencil size.
      */
     unsigned getDefaultStencilSize() const;
+
+    /*
+     * Returns the number of constraint equations that should be satisfied throughout the evolution.
+     * This is used to check that the equivalent of Gauss's law remains satisfied.
+     * 
+     * @return        unsigned                The number of constraint equations.
+     *
+     */
+    unsigned getNumberOfConstraintEquations() const;
 
     /*
      * Calculate the contribution to the equations of motion from the potential.
@@ -204,11 +213,25 @@ public:
     /*
      * Calculates the electric energy associated with the fields at this position.
      *
-     * @param        float* localvector_fields[2]                           Pointers to the vector fields at this location, for both timesteps.
+     * @param        float* local_vector_fields[2]                           Pointers to the vector fields at this location, for both timesteps.
      * 
-     * @return       float                                                  The electric energy (density) at this position.
+     * @return       float                                                   The electric energy (density) at this position.
      */
     float calcElectricEnergy(const float* const local_vector_fields[2]) const;
+
+    /*
+     * Calculates the violation of the constraint equations associated with the temporal gauge fixing.
+     *
+     * @param        unsigned num_equations                                  The number of constraint equations.
+     * @param        long long int t_future_index                            Index to add (may be negative) that swaps from present indices to future.
+     * @param        float* local_scalar_fields[2]                           Pointers to scalar fields at this location, for both timesteps.
+     * @param        vector<vector<float*>> &vector_pointers                 Array of pointers to the vector fields at the required grid positions.
+     * 
+     * @return       vector<float>                                           Violation of the constraint equations.
+     */
+    std::vector<float> calcConstraintViolation(const unsigned &num_equations, const long long int &t_future_index,
+                                               const float* const local_scalar_fields[2], 
+                                               const std::vector<std::vector<const float*>> &vector_pointers) const;
 
     /*
      * Responsible for calculating the value of the field at the next timestep.

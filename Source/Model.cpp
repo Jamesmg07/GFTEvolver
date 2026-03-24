@@ -234,7 +234,12 @@ unsigned Model::getDefaultStencilSize() const
     return stencil_size;
 }
 
-void Model::calcPotentialContributions(const float* const local_scalar_fields)
+unsigned Model::getNumberOfConstraintEquations() const
+{
+    return this->wilsonLoop->getNumberOfConstraintEquations();
+}
+
+void Model::calcPotentialContributions(const float *const local_scalar_fields)
 {
     this->potentialContributions = this->potential->calcPotentialDerivatives(local_scalar_fields);
 }
@@ -283,6 +288,27 @@ float Model::calcElectricEnergy(const float *const local_vector_fields[2]) const
         return this->wilsonLoop->calcElectricEnergy(local_vector_fields);
     else
         return 0.f;
+}
+
+std::vector<float> Model::calcConstraintViolation(const unsigned &num_equations, const long long int &t_future_index, 
+                                                  const float *const local_scalar_fields[2], 
+                                                  const std::vector<std::vector<const float *>> &vector_pointers) const
+{
+    if (this->wilsonLoop)
+    {
+        std::vector<float> violation(num_equations, 0.f);
+        std::vector<float> gradient_contribution = this->gradient->calcConstraintContributions(local_scalar_fields);
+        std::vector<float> electric_contribution = this->wilsonLoop->calcConstraintContributions(t_future_index, vector_pointers);
+
+
+        for (unsigned iter = 0; iter < num_equations; iter++)
+            violation[iter] = electric_contribution[iter] - this->wilsonLoop->getSqrCouplings(iter)*gradient_contribution[iter];
+
+
+        return violation;
+    }
+    else
+        return std::vector<float>();
 }
 
 void Model::evolve(float *const local_scalar_fields[2], float *const local_vector_fields[2],

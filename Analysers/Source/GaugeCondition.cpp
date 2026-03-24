@@ -1,8 +1,8 @@
-#include "Energy.hpp"
+#include "GaugeCondition.hpp"
 
 ////////////////////////////////////////  Initialisers  /////////////////////////////////////////////////////
 
-void Energy::configure(const std::string path, const bool debug)
+void GaugeCondition::configure(const std::string path, const bool debug)
 {
     std::ifstream ifs(path);
 
@@ -58,32 +58,25 @@ void Energy::configure(const std::string path, const bool debug)
 
     if (debug)
     {
-        std::cout << "ANALYSERS::ENERGY::\n"
+        std::cout << "ANALYSERS::GAUGECONDITION::\n"
                   << "Global quantities data path: Data/" << this->globalQuantitiesPath << "\n"
-                  << "Global options:: Energy: " << this->globalOptions[0] << ", Potential: " << this->globalOptions[1]
-                  << ", Gradient: " << this->globalOptions[2] << ", Kinetic: " << this->globalOptions[3] 
-                  << ", Magnetic: " << this->globalOptions[4] << ", Electric: " << this->globalOptions[5] << ", every " << this->globalFrequency << " timesteps\n"
+                  << "Global options:: Integrated: " << this->globalOptions[0] << ", Max: " << this->globalOptions[1]
+                  << ", every " << this->globalFrequency << " timesteps\n"
                   << "Local quantities data path: Data/" << this->localQuantitiesPath << "\n"
-                  << "Local options:: Energy: " << this->localOptions[0] << ", Potential: " << this->localOptions[1]
-                  << ", Gradient: " << this->localOptions[2] << ", Kinetic: " << this->localOptions[3] 
-                  << ", Magnetic: << " << this->localOptions[4] << ", Electric: " << this->localOptions[5] << ", every " << this->localFrequency << " timesteps\n"
+                  << "Local options:: Local Violation: " << this->localOptions[0] << ", every " << this->localFrequency << " timesteps\n"
                   << std::endl;
     }
 }
 
-void Energy::initVariables(const long long unsigned grid_size)
+void GaugeCondition::initVariables(const long long unsigned &grid_size)
 {
-    this->energy = 0.f;
-    this->potential = 0.f;
-    this->gradient = 0.f;
-    this->kinetic = 0.f;
-    this->magnetic = 0.f;
-    this->electric = 0.f;
+    this->integratedAbsViolation.resize(this->numEquations, 0.f);
+    this->maxAbsViolation.resize(this->numEquations, 0.f);
 
     for (unsigned iter = 0; iter < this->numLocalOptions; iter++)
     {
         if (this->localOptions[iter])
-            this->densityPointers[iter]->resize(grid_size, 0.f);
+            this->localPointers[iter]->resize(grid_size, std::vector<float>(this->numEquations, 0.f));
     }
 
     this->counter = 0;
@@ -93,80 +86,83 @@ void Energy::initVariables(const long long unsigned grid_size)
 
 ///////////////////////////////////  Constructors/Destructors  //////////////////////////////////////////////
 
-Energy::Energy(const Model &model, const double &dx, const double &dy, const double &dz, const long long unsigned grid_size)
-    : model(model), dx(dx), dy(dy), dz(dz),
-      energyPointers{&this->energy, &this->potential, &this->gradient, &this->kinetic, &this->magnetic, &this->electric},
-      densityPointers{&this->energyDensity, &this->potentialDensity, &this->gradientDensity, &this->kineticDensity,
-                       &this->magneticDensity, &this->electricDensity}
+GaugeCondition::GaugeCondition(const Model &model, const double &dx, const double &dy, const double &dz, 
+                               const long long unsigned grid_size, const unsigned &num_vector_components)
+    : model(model), dx(dx), dy(dy), dz(dz), gridSize(grid_size), numVectorComponents(num_vector_components),
+      globalPointers{&this->integratedAbsViolation, &this->maxAbsViolation},
+      localPointers{&this->localViolation}
 {
-    this->configure(std::string(SOURCE_DIR) + "/Config/Energy.cfg", true);
-    this->initVariables(grid_size);
+    this->configure(std::string(SOURCE_DIR) + "/Config/GaugeCondition.cfg", true);
 }
 
-Energy::~Energy()
+GaugeCondition::~GaugeCondition()
 {
 }
 
 ///////////////////////////////////////  Public Functions  //////////////////////////////////////////////////
 
-void Energy::initialAnalysis()
+void GaugeCondition::initialAnalysis()
 {
-    this->model.energyPreparation(this->globalOutput || this->localOutput);
+    // Have to do these a bit later so that model has been set-up first.
+    this->numEquations = this->model.getNumberOfConstraintEquations();
+    this->initVariables(this->gridSize);
 }
 
-void Energy::preEvolveLocationAnalysis(const long long unsigned index,
+void GaugeCondition::preEvolveLocationAnalysis(const long long unsigned index,
                                        const float* const local_scalar_pointers[2], const std::vector<std::vector<const float*>> &scalar_pointers,
                                        const float* const local_vector_pointers[2], const std::vector<std::vector<const float*>> &vector_pointers)
+{
+}
+
+void GaugeCondition::postEvolveLocationAnalysis(const unsigned &t_now, const long long unsigned index, const float *const local_scalar_pointers[2], const std::vector<std::vector<const float *>> &scalar_pointers, const float *const local_vector_pointers[2], const std::vector<std::vector<const float *>> &vector_pointers)
 {
     if (this->localOutput || this->globalOutput)
     {
 
-
-
-        float potential_density = this->model.calcPotentialEnergy(local_scalar_pointers[1]);
-        float gradient_density = this->model.calcGradientEnergy(scalar_pointers, vector_pointers);
-        float kinetic_density = this->model.calcKineticEnergy(local_scalar_pointers);
-        float magnetic_density = this->model.calcMagneticEnergy(vector_pointers);
-        float electric_density = this->model.calcElectricEnergy(local_vector_pointers);
-
-        float energy_density = potential_density + gradient_density + kinetic_density + magnetic_density + electric_density;
+        long long int t_future_index = this->gridSize*this->numVectorComponents;
+        if (t_now == 1)
+            t_future_index = -t_future_index; // Need to subtract this index rather than add.
+            
+        std::vector<float> local_violation = this->model.calcConstraintViolation(this->numEquations, t_future_index, 
+                                                                                 local_scalar_pointers, vector_pointers);
 
         // So I can loop over output choices and/or contributions to the integrated quantities.
-        const float* const density_pointers[this->numLocalOptions] = {&energy_density, &potential_density, &gradient_density, &kinetic_density,
-                                                  &magnetic_density, &electric_density};
+        const std::vector<float>* const local_pointers[this->numLocalOptions] = {&local_violation};
 
         if (this->localOutput)
         {
             for (unsigned iter = 0; iter < this->numLocalOptions; iter++)
             {
                 if (this->localOptions[iter])
-                    (*this->densityPointers[iter])[index] = *density_pointers[iter];
+                    (*this->localPointers[iter])[index] = *local_pointers[iter];
             }
         }
 
         // Have any global output options been chosen?
         if (this->globalOutput)
         {
-            // So I can loop over the integrated quantities and the densities
-            for (unsigned iter = 0; iter < this->numGlobalOptions; iter++)
-            {
-                if (this->globalOptions[iter])
-                {
-                    // Only bother doing the multiplication by volume at the timestepAnalysis stage do avoid unneccessary computation.
-                    *this->energyPointers[iter] += *density_pointers[iter];
-                }
-            }
-            
+             for (unsigned iter = 0; iter < this->numEquations; iter++)
+             {
+                // Pre-calculate the value since it might be used multiple times
+                float value = std::abs((*local_pointers[0])[iter]);
+
+                // First option is effectively an integration of the absolute value of each violation.
+                // Multiplcation by the volume factor will be done later to avoid unneccessary computation.
+                if (this->globalOptions[0])
+                    this->integratedAbsViolation[iter] += value;
+
+                // Second option is about finding the largest absolute violation in the grid.
+                if (this->globalOptions[1] && value > this->maxAbsViolation[iter])
+                    this->maxAbsViolation[iter] = value;
+
+             }
+        
         }
 
     }
 }
 
-void Energy::postEvolveLocationAnalysis(const unsigned &t_now, const long long unsigned index, const float *const local_scalar_pointers[2], const std::vector<std::vector<const float *>> &scalar_pointers, const float *const local_vector_pointers[2], const std::vector<std::vector<const float *>> &vector_pointers)
-{
-}
-
-void Energy::timestepAnalysis(const unsigned &time_step)
+void GaugeCondition::timestepAnalysis(const unsigned &time_step)
 {
     if (this->globalOutput)
     {
@@ -174,12 +170,15 @@ void Energy::timestepAnalysis(const unsigned &time_step)
 
         if (ofs.is_open())
         {
-            for (unsigned iter = 0; iter < this->numGlobalOptions; iter++)
+            for (unsigned option_iter = 0; option_iter < this->numGlobalOptions; option_iter++)
             {
-                if (this->globalOptions[iter])
+                if (this->globalOptions[option_iter])
                 {
-                    ofs << *this->energyPointers[iter]*this->dx*this->dy*this->dz << " ";
-                    *this->energyPointers[iter] = 0.f;
+                    for (unsigned eq_iter = 0; eq_iter < this->numEquations; eq_iter++)
+                    {
+                        ofs << (*this->globalPointers[option_iter])[eq_iter]*this->dx*this->dy*this->dz << " ";
+                        (*this->globalPointers[option_iter])[eq_iter] = 0.f;
+                    }
                 }
             }
             ofs << "\n";
@@ -198,9 +197,12 @@ void Energy::timestepAnalysis(const unsigned &time_step)
             {
                 if (this->localOptions[iter])
                 {
-                    for (float &data : *this->densityPointers[iter])
+                    for (std::vector<float> &vector : *this->localPointers[iter])
                     {
-                        ofs << data << "\n";
+                        for (float &data : vector)
+                        {
+                            ofs << data << "\n";
+                        }
                     }
                 }
             }
@@ -215,10 +217,8 @@ void Energy::timestepAnalysis(const unsigned &time_step)
     // Check if conditions for global and local output are satisfied
     this->globalOutput = this->anyGlobalOptions && this->counter%this->globalFrequency == 0;
     this->localOutput = this->anyLocalOptions && this->counter%this->localFrequency == 0;
-
-    this->model.energyPreparation(this->globalOutput || this->localOutput);
 }
 
-void Energy::finalAnalysis()
+void GaugeCondition::finalAnalysis()
 {
 }

@@ -115,6 +115,15 @@ namespace Gradients {
         float calcKineticEnergy(const float* const local_scalar_fields[2]) const;
 
         /*
+        * Calculates the contributions from the gradients to the constraint equations associated with the temporal gauge fixing.
+        * 
+        * @param        float* local_scalar_fields[2]                           Pointers to scalar fields at this location, for both timesteps.
+        * 
+        * @return       vector<float>                                           Contribution to the constraint equations.
+        */
+        std::vector<float> calcConstraintContributions(const float* const local_scalar_fields[2]) const;
+
+        /*
         * Calculate the contribution from the gradient energy term to the scalar equations of motion.
         * 
         * @param        vector<vector<float*>> &scalar_pointers                 Array of pointers to the scalar fields at the required grid positions.

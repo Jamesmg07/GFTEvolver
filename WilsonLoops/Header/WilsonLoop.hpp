@@ -19,13 +19,21 @@ public:
 
     /*
      * Pure virtual function that must be defined in each child class.
-     * Intended use it to return the relevant squares of the gauge couplings, for each component.
+     * Intended use is to return the relevant squares of the gauge couplings, for each component.
      * 
      * @param        unsigned comp_iter                                     Integer that decides which component of the gauge field.
      * 
      * @return       float                                                  Square of the relevant gauge coupling.
      */
     virtual float getSqrCouplings(const unsigned comp_iter) const = 0;
+
+    /*
+     * Pure virtual function that must be defined in each child class.
+     * Intended use is to return the number of constraint equations (due to the fixing of the temporal gauge) that should be satisfied throughout.
+     * 
+     * @return        unsigned                                              The number of constraint equations.
+     */
+    virtual unsigned getNumberOfConstraintEquations() const = 0;
 
     /*
      * Pure virtual function that must be defined in each child class.
@@ -55,6 +63,18 @@ public:
      * @return      float                                                   Energy density at this position from the (temporal part of the) Yang-Mills term.
      */
     virtual float calcElectricEnergy(const float* const local_vector_fields[2]) const = 0;
+
+    /*
+     * Pure virtual function that must be defined in each child class.
+     * Intended use is to calculate the contributions from the wilson loops to the constraint equations associated with the temporal gauge fixing.
+     * 
+     * @param        long long int t_future_index                            Index to add (may be negative) that swaps from present indices to future.
+     * @param        vector<vector<float*>> &vector_pointers                 Array of pointers to the vector fields at the required grid positions.
+     * 
+     * @return       vector<float>                                           Contribution to the constraint equations.
+     */
+    virtual std::vector<float> calcConstraintContributions(const long long int &t_future_index, 
+                                                           const std::vector<std::vector<const float*>> &vector_pointers) const = 0;
 
     /*
      * Pure virtual function that must be defined in each child class.

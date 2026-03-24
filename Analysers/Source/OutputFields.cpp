@@ -114,9 +114,15 @@ void OutputFields::initialAnalysis()
     
 }
 
-void OutputFields::locationAnalysis(const long long unsigned index,
-                                    const float* const local_scalar_pointers[2], const std::vector<std::vector<const float*>> &scalar_pointers,
-                                    const float* const local_vector_pointers[2], const std::vector<std::vector<const float*>> &vector_pointers)
+void OutputFields::preEvolveLocationAnalysis(const long long unsigned index,
+                                             const float* const local_scalar_pointers[2], const std::vector<std::vector<const float*>> &scalar_pointers,
+                                             const float* const local_vector_pointers[2], const std::vector<std::vector<const float*>> &vector_pointers)
+{
+}
+
+void OutputFields::postEvolveLocationAnalysis(const unsigned &t_now, const long long unsigned index, 
+                                              const float *const local_scalar_pointers[2], const std::vector<std::vector<const float *>> &scalar_pointers, 
+                                              const float *const local_vector_pointers[2], const std::vector<std::vector<const float *>> &vector_pointers)
 {
 }
 

@@ -54,7 +54,7 @@ namespace WilsonLoops{
          * 
          * @return       vector<double>                        The coefficents of the SU(2) representation described above.
          */
-        std::vector<double> getSU2Representation(const float* const vector_pointer, const unsigned dir_index, const bool conjugate) const;
+        std::vector<double> getSU2Representation(const float* const vector_pointer, const long long int dir_index, const bool conjugate) const;
 
         /*
          * Does the opposite of above. Takes in a representation of SU(2) like (c^0, c^a) and returns w_i^a.
@@ -98,6 +98,13 @@ namespace WilsonLoops{
         float getSqrCouplings(const unsigned comp_iter) const;
 
         /*
+        * Returns the number of constraint equations (due to the fixing of the temporal gauge) that should be satisfied throughout.
+        * 
+        * @return        unsigned                                              The number of constraint equations.
+        */
+        unsigned getNumberOfConstraintEquations() const;
+
+        /*
         * Set up for the energy calculation. Only runs if energy analyser is being used.
         *
         * @param        bool store_energy                                      Boolean that decides if energy calculations are performed during evolution.
@@ -121,6 +128,17 @@ namespace WilsonLoops{
         * @return      float                                                   Energy density at this position from the (temporal part of the) Yang-Mills term.
         */
         float calcElectricEnergy(const float* const local_vector_fields[2]) const;
+
+        /*
+        * Calculates the contributions from the wilson loops to the constraint equations associated with the temporal gauge fixing.
+        * 
+        * @param        long long int t_future_index                            Index to add (may be negative) that swaps from present indices to future.
+        * @param        vector<vector<float*>> &vector_pointers                 Array of pointers to the vector fields at the required grid positions.
+        * 
+        * @return       vector<float>                                           Contribution to the constraint equations.
+        */
+        std::vector<float> calcConstraintContributions(const long long int &t_future_index, 
+                                                       const std::vector<std::vector<const float*>> &vector_pointers) const;
 
         /*
         * Calculates the contribution to the equations of motion coming from the spatial part of both Yang-Mills terms.

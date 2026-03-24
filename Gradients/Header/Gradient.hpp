@@ -78,6 +78,16 @@ public:
 
     /*
      * Pure virtual function that must be defined in each child class.
+     * Intended use is to calculate the contributions from the gradients to the constraint equations associated with the temporal gauge fixing.
+     * 
+     * @param        float* local_scalar_fields[2]                           Pointers to scalar fields at this location, for both timesteps.
+     * 
+     * @return       vector<float>                                           Contribution to the constraint equations.
+     */
+    virtual std::vector<float> calcConstraintContributions(const float* const local_scalar_fields[2]) const = 0;
+
+    /*
+     * Pure virtual function that must be defined in each child class.
      * Intended use is to calculate the contribution from the gradient
      * energy term to the scalar equations of motion.
      * 

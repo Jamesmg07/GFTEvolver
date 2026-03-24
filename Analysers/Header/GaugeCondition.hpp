@@ -3,7 +3,7 @@
 #include "Analyser.hpp"
 #include "Model.hpp"
 
-class Energy
+class GaugeCondition
     : public Analyser
 {
 private:
@@ -14,17 +14,20 @@ private:
 
     // These need to match the number of options provided.
     // Effectively they are hard-coded but in such a way that changing it later is slightly less error prone.
-    // They are usually equal because of the set-up of the energy calculations, but global must strictly be less than local.
-    static constexpr unsigned numGlobalOptions = 6U;
-    static constexpr unsigned numLocalOptions = 6U;
+    static constexpr unsigned numGlobalOptions = 2U;
+    static constexpr unsigned numLocalOptions = 1U;
 
-    float energy, potential, kinetic, gradient, magnetic, electric;
-    float* const energyPointers[numGlobalOptions];
+    unsigned numEquations;
 
-    std::vector<float> energyDensity, potentialDensity, kineticDensity, gradientDensity, magneticDensity, electricDensity;
-    std::vector<float>* const densityPointers[numLocalOptions];
+    std::vector<float> integratedAbsViolation, maxAbsViolation;
+    std::vector<float>* const globalPointers[numGlobalOptions];
+
+    std::vector<std::vector<float>> localViolation;
+    std::vector<std::vector<float>>* const localPointers[numLocalOptions];
 
     const double &dx, &dy, &dz;
+    const long long unsigned gridSize;
+    const unsigned &numVectorComponents;
 
     bool globalOptions[numGlobalOptions], localOptions[numLocalOptions], anyLocalOptions, anyGlobalOptions;
     unsigned globalFrequency, localFrequency, counter;
@@ -47,14 +50,15 @@ private:
      *
      * @param        long long unsigned grid_size                Total spatial size of the lattice.
      */
-    void initVariables(const long long unsigned grid_size);
+    void initVariables(const long long unsigned &grid_size);
 
 public:
 
     //////////////////////////////////////////////////  Constructors/Destructors  //////////////////////////////////////////////////////////////
 
-    Energy(const Model &model, const double &dx, const double &dy, const double &dz, const long long unsigned grid_size);
-    virtual ~Energy();
+    GaugeCondition(const Model &model, const double &dx, const double &dy, const double &dz, 
+                   const long long unsigned grid_size, const unsigned &num_vector_components);
+    virtual ~GaugeCondition();
 
     //////////////////////////////////////////////////////  Public Functions  //////////////////////////////////////////////////////////////////
 
@@ -64,7 +68,7 @@ public:
     void initialAnalysis();
 
     /*
-     * Calculates the energy density at each location.
+     * Not required.
      * 
      * @param        long long unsigned index                              Index for the density arrays
      * @param        float* local_scalar_pointers[2]                       Pointers to the scalar field at current location for both timesteps.
@@ -78,7 +82,7 @@ public:
                                    const float* const local_vector_pointers[2], const std::vector<std::vector<const float*>> &vector_pointers);
 
     /*
-     * Not required.
+     * Calculates the extent to which the gauge condition(s) is(are) violated at each location in the grid.
      * 
      * @param        unsigned t_now                                        Index to determine locations in array that correspond to "now" (other is future)
      * @param        long long unsigned index                              Index for the density arrays
@@ -93,7 +97,8 @@ public:
                                     const float* const local_vector_pointers[2], const std::vector<std::vector<const float*>> &vector_pointers);
 
     /*
-     * Output the total energy to file and reset the total energy.
+     * Outputs the data at each timestep.
+     * Performs any additional processes that need to happen once per timestep, such as resetting variables to zero.
      *
      * @param        unsigned time_step                                    The current timestep.
      */
