@@ -184,8 +184,13 @@ Gradients::StandardModel::StandardModel(
 {
     this->configure(std::string(SOURCE_DIR) + "/Config/StandardModel.cfg", true);
 
-    // THIS SCENARIO ACTUALLY REQUIRES A CERTAIN NUMBER OF SCALAR AND VECTOR COMPONENTS
-    // I SHOULD PROBABLY RUN A CHECK FOR THIS AT THIS STAGE AND SEND A WARNING IF THE WRONG NUMBER IS BEING USED...
+    if (this->numScalarComponents != 4)
+        throw std::runtime_error("GRADIENTS::STANDARDMODEL:: 4 scalar components are required but " + std::to_string(this->numScalarComponents) 
+                                + " have been assigned.");
+    if (this->numVectorComponents != 12 && this->numVectorComponents != 15)
+        throw std::runtime_error("GRADIENTS::STANDARDMODEL:: Either 12 or 15 vector components are required (depending on whether the generator "
+                                "or quaternion representation is used) but " + std::to_string(this->numVectorComponents) + " have been assigned.\n"
+                                "Note that 3 spatial dimensions are assumed so requested number of components is multiplied by 3 internally.");
 }
 
 Gradients::StandardModel::~StandardModel()

@@ -1,5 +1,8 @@
 #pragma once
 
+// Could potentially reduce the number of includes by using a separate function to instantiate child classes if
+// the includes list starts to get a little long.
+
 #include "Potential.hpp"
 #include "SO_N.hpp"
 
@@ -64,7 +67,7 @@ private:
      * Initialise gradient based on chosen child class.
      * Will configure the chosen gradient based on the config file associated with the child class.
      * 
-     * @param        int gradient_type                    Corresponds to a chosen gradient read from Model.cfg
+     * @param        int &gradient_type                   Corresponds to a chosen gradient read from Model.cfg
      * @param        unsigned &num_scalar_components      Reference to the number of scalar field components.
      * @param        unsigned &num_vector_components      Reference to the number of vector field components.
      * @param        unsigned &nx, &ny, &nz               References to the number of grid points in each direction.
@@ -81,10 +84,12 @@ private:
      * Initialise wilsonLoop based on chosen child class.
      * Will configure the chosen wilsonLoop based on the config file associated with the child class.
      * 
-     * @param        int wilson_loop_type                Corresponds to a chosen potential read from Model.cfg
+     * @param        int &wilson_loop_type               Corresponds to a chosen potential read from Model.cfg
+     * @param        unsigned &num_vector_components     Reference to the number of vector field components.
      * @param        double &dt, &dx, &dy, &dz           References to the timestep size and lattice spacing in each direction.
      */
-    void initWilsonLoop(const int& wilson_loop_type, const double &dt, const double &dx, const double &dy, const double &dz);
+    void initWilsonLoop(const int& wilson_loop_type, const unsigned &num_vector_components,
+                        const double &dt, const double &dx, const double &dy, const double &dz);
 
 
 public:

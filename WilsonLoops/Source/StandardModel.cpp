@@ -182,11 +182,16 @@ std::vector<double> WilsonLoops::StandardModel::SU2Product(const std::vector<dou
 
 /////////////////////////////////////////  Constructors/Destructors  ///////////////////////////////////////
 
-WilsonLoops::StandardModel::StandardModel(const double &dt, const double &dx, const double &dy, const double &dz)
+WilsonLoops::StandardModel::StandardModel(const unsigned &num_vector_components, const double &dt, const double &dx, const double &dy, const double &dz)
     : dt(dt), dx(dx), dy(dy), dz(dz)
 {
     this->configure(std::string(SOURCE_DIR)+"/Config/StandardModel.cfg", true);
     this->initVariables();
+
+    if (num_vector_components != 12 && num_vector_components != 15)
+        throw std::runtime_error("WILSONLOOPS::STANDARDMODEL:: Either 12 or 15 vector components are required (depending on whether the generator "
+                                "or quaternion representation is used) but " + std::to_string(num_vector_components) + " have been assigned.\n"
+                                "Note that 3 spatial dimensions are assumed so requested number of components is multiplied by 3 internally.");
 }
 
 

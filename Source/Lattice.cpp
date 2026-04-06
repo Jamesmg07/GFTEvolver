@@ -503,11 +503,6 @@ Lattice::Lattice()
     // Configure the lattice.
     this->configure(std::string(SOURCE_DIR) + "/Config/Lattice.cfg", true);
     std::cout << "Lattice configure done" << std::endl;
-
-    // Initialise the fields that live on the lattice.
-    this->initFields();
-    std::cout << "Lattice initFields done" << std::endl;
-
     
     // Configure the model (potential, gradients and wilson loops).
     this->model.configure(
@@ -517,6 +512,10 @@ Lattice::Lattice()
         this->dx, this->dy, this->dz, 
         this->dt, true
     );
+
+    // Initialise the fields that live on the lattice.
+    this->initFields();
+    std::cout << "Lattice initFields done" << std::endl;
 
     // Determine the largest default stencil size
     this->stencilSize = this->getDefaultStencilSize();

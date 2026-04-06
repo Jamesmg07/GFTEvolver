@@ -122,7 +122,7 @@ void GaugeCondition::postEvolveLocationAnalysis(const unsigned &t_now, const lon
         long long int t_future_index = this->gridSize*this->numVectorComponents;
         if (t_now == 1)
             t_future_index = -t_future_index; // Need to subtract this index rather than add.
-            
+
         std::vector<float> local_violation = this->model.calcConstraintViolation(this->numEquations, t_future_index, 
                                                                                  local_scalar_pointers, vector_pointers);
 
@@ -168,6 +168,10 @@ void GaugeCondition::timestepAnalysis(const unsigned &time_step)
     {
         std::ofstream ofs(std::string(DATA_DIR) + "/" + this->globalQuantitiesPath, std::ios::app);
 
+        // Multiply the integrated quantity by the volume factor now
+        for (unsigned iter = 0; iter < this->numEquations; iter++)
+            this->integratedAbsViolation[iter] *= this->dx*this->dy*this->dz;
+
         if (ofs.is_open())
         {
             for (unsigned option_iter = 0; option_iter < this->numGlobalOptions; option_iter++)
@@ -176,7 +180,7 @@ void GaugeCondition::timestepAnalysis(const unsigned &time_step)
                 {
                     for (unsigned eq_iter = 0; eq_iter < this->numEquations; eq_iter++)
                     {
-                        ofs << (*this->globalPointers[option_iter])[eq_iter]*this->dx*this->dy*this->dz << " ";
+                        ofs << (*this->globalPointers[option_iter])[eq_iter]<< " ";
                         (*this->globalPointers[option_iter])[eq_iter] = 0.f;
                     }
                 }

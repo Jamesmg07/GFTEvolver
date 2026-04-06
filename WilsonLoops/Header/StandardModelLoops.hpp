@@ -83,7 +83,7 @@ namespace WilsonLoops{
 
         //////////////////////////////////////////  Constructors/Destructors  /////////////////////////////////////////
 
-        StandardModel(const double &dt, const double &dx, const double &dy, const double &dz);
+        StandardModel(const unsigned &num_vector_components, const double &dt, const double &dx, const double &dy, const double &dz);
         virtual ~StandardModel();
 
         //////////////////////////////////////////////  Public Functions  /////////////////////////////////////////////

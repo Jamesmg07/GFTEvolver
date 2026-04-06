@@ -6,19 +6,35 @@
 
 int main()
 {
-    // Construct the lattice and load in from config files.
-    Lattice lattice;
 
-    // Run any analyses of the initial state that have been assigned.
-    lattice.initialAnalysis();
+    try 
+    {
+        // Construct the lattice and load in from config files.
+        Lattice lattice;
 
-    // Main part of the simulation, evolves the system until the end of the sim and handles any assigned continual analyses.
-    lattice.evolve();
+        // Run any analyses of the initial state that have been assigned.
+        lattice.initialAnalysis();
 
-    // Run any analyses of the final state that have been assigned.
-    lattice.finalAnalysis();
+        // Main part of the simulation, evolves the system until the end of the sim and handles any assigned continual analyses.
+        lattice.evolve();
 
-    return 0;
+        // Run any analyses of the final state that have been assigned.
+        lattice.finalAnalysis();
+
+        return EXIT_SUCCESS;
+    }
+    catch (const std::exception& exception)
+    {
+        std::cerr << "Error in " << exception.what() << std::endl;
+
+        return EXIT_FAILURE;
+    }
+    catch (...)
+    {
+        std::cerr << "Unknown error occurred" << std::endl;
+
+        return EXIT_FAILURE;
+    }
 
 }
 

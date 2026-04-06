@@ -75,7 +75,8 @@ void Model::initGradient(
     }
 }
 
-void Model::initWilsonLoop(const int &wilson_loop_type, const double &dt, const double &dx, const double &dy, const double &dz)
+void Model::initWilsonLoop(const int &wilson_loop_type, const unsigned &num_vector_components,
+                           const double &dt, const double &dx, const double &dy, const double &dz)
 {
     switch (wilson_loop_type)
     {
@@ -88,7 +89,7 @@ void Model::initWilsonLoop(const int &wilson_loop_type, const double &dt, const 
 
     case SM_WILSON_LOOP:
 
-        this->wilsonLoop = new WilsonLoops::StandardModel(dt, dx, dy, dz);
+        this->wilsonLoop = new WilsonLoops::StandardModel(num_vector_components, dt, dx, dy, dz);
         break;
 
     default:
@@ -167,7 +168,7 @@ void Model::configure(
         // Load chosen wilson loop type and set-up the chosen wilson loop.
         std::getline(ifs, description, ':');
         ifs >> wilson_loop_type;
-        this->initWilsonLoop(wilson_loop_type, dt, dx, dy, dz);
+        this->initWilsonLoop(wilson_loop_type, num_vector_components, dt, dx, dy, dz);
 
         
         // Load parameters of the damping term
