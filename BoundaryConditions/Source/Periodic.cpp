@@ -245,11 +245,10 @@ void Periodic::evolve(const unsigned &t_now, const unsigned &stencil_size)
                 // Also adds the final z contribution and the extras needed for the wilson loops.
                 std::vector<std::vector<const float*>> vector_pointers = this->generateVectorPointers(z_running_indices, x_iter, y_iter, z_iter);
 
-
                 // Process different contributions to the equations of motion.
                 this->model.calcPotentialContributions(local_scalar_pointers[1]);
                 this->model.calcGradientContributions(scalar_pointers, vector_pointers);
-                this->model.calcYangMillsContributions(vector_pointers, local_vector_pointers);      
+                this->model.calcYangMillsContributions(vector_pointers, local_vector_pointers);     
 
                 // Run all analyser functions that need to happen at every location in the grid, before the fields are evolved.
                 // These analysers have access to the past and present timesteps.
@@ -258,12 +257,10 @@ void Periodic::evolve(const unsigned &t_now, const unsigned &stencil_size)
                                                         local_scalar_pointers, scalar_pointers,
                                                         local_vector_pointers, vector_pointers);
 
-
                 // Calculate the fields at the next timestep.
                 this->model.evolve(local_scalar_pointers, local_vector_pointers, this->dt,
                                    this->numScalarComponents, this->numVectorComponents);
             
-
                 // Run all analyser functions that need to happen at every location in the grid, after the fields are evolved.
                 // These analysers have access to the present and future timesteps.
                 for (auto analyser : this->analysers)

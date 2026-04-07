@@ -5,6 +5,7 @@
 
 #include "Potential.hpp"
 #include "SO_N.hpp"
+#include "Double_SO_N.hpp"
 
 #include "Gradient.hpp"
 #include "GlobalGradients.hpp"
@@ -13,9 +14,9 @@
 #include "WilsonLoop.hpp"
 #include "StandardModelLoops.hpp"
 
-enum Potential_Types {UNASSIGNED_POTENTIAL = 0, SO_N_POTENTIAL, TWO_HDM_POTENTIAL};
-enum Gradient_Types {UNASSIGNED_GRADIENT = 0, GLOBAL_GRADIENT, SM_GRADIENT};
-enum Wilson_Loop_Types {UNASSIGNED_WILSON_LOOP = 0, SM_WILSON_LOOP};
+enum Potential_Types {NULL_POTENTIAL = 0, SO_N_POTENTIAL, DOUBLE_SO_N_POTENTIAL};
+enum Gradient_Types {NULL_GRADIENT = 0, GLOBAL_GRADIENT, SM_GRADIENT};
+enum Wilson_Loop_Types {NULL_WILSON_LOOP = 0, SM_WILSON_LOOP};
 
 class Model
 {

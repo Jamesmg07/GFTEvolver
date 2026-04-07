@@ -8,6 +8,7 @@ set(
   SOURCES
   "${CMAKE_CURRENT_SOURCE_DIR}/Source/Potential.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/Source/SO_N.cpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/Source/Double_SO_N.cpp"
 )
 
 # Create a library

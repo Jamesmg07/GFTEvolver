@@ -74,6 +74,11 @@ unsigned Gradients::Global::getDefaultStencilSize() const
     return this->stencils[0][0].size()/2;
 }
 
+unsigned Gradients::Global::getNumberOfConstraintEquations() const
+{
+    return 0;
+}
+
 float Gradients::Global::calcGradientEnergy(const std::vector<std::vector<const float*>> &scalar_pointers,
                                             const std::vector<std::vector<const float*>> &vector_pointers) const
 {
@@ -136,5 +141,5 @@ std::vector<double> Gradients::Global::calcDerivatives(const std::vector<std::ve
 std::vector<double> Gradients::Global::calcCurrents(const std::vector<std::vector<const float*>> &scalar_pointers, 
                                                    const std::vector<std::vector<const float*>> &vector_pointers) const
 {
-    return std::vector<double>();
+    return std::vector<double>(this->numVectorComponents, 0.0);
 }

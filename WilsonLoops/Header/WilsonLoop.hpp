@@ -111,3 +111,47 @@ public:
     virtual void evolve(float* const local_vector_fields[2], std::vector<double> equation_RHS) = 0;
 
 };
+
+
+
+/////////////////////////////////////////////  Null Wilson Loop  /////////////////////////////////////////////////////////
+// Trivial version of WilsonLoop, where all functions either do nothing or return zero(s).
+
+class NullWilsonLoop:
+    public WilsonLoop
+{
+private:
+
+    ////////////////////////////////////////////  Variables  ///////////////////////////////////////////////
+
+    const unsigned &numVectorComponents;
+
+public:
+
+    ////////////////////////////////////  Constructors/Destructors  ////////////////////////////////////////
+
+    NullWilsonLoop(const unsigned &num_vector_components);
+    virtual ~NullWilsonLoop();
+
+    ////////////////////////////////////////  Public Functions  ////////////////////////////////////////////
+
+    float getSqrCouplings(const unsigned comp_iter) const;
+
+    unsigned getNumberOfConstraintEquations() const;
+
+    void energyPreparation(const bool store_energy);
+
+    float calcMagneticEnergy(const std::vector<std::vector<const float*>> &vector_pointers) const;
+
+    float calcElectricEnergy(const float* const local_vector_fields[2]) const;
+
+    std::vector<float> calcConstraintContributions(const long long int &t_future_index, 
+                                                           const std::vector<std::vector<const float*>> &vector_pointers) const;
+
+    std::vector<double> calcMagneticContributions(const std::vector<std::vector<const float*>> &vector_pointers) const;
+
+    std::vector<double> calcElectricContributions(const float* const local_vector_fields[2]) const;
+
+    void evolve(float* const local_vector_fields[2], std::vector<double> equation_RHS);
+
+};

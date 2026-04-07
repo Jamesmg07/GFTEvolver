@@ -8,18 +8,6 @@ class Potential
 {
 private:
 
-    /////////////////////////////////////////////  Initialisers  /////////////////////////////////////////////
-
-    /*
-     * Pure virtual function that must be defined in each child class.
-     * Intended use is to load in the parameters of the potential, with the possibility to 
-     * include overrides for alternative parameterisations.
-     * 
-     * @param        string path                Path to the config file.
-     * @param        bool debug                 Outputs loaded parameters if true.
-     */
-    virtual void configure(const std::string path, const bool debug = false) = 0;
-
 public:
 
     ///////////////////////////////////////  Constructors/Destructors  ///////////////////////////////////////
@@ -50,4 +38,32 @@ public:
     virtual std::vector<double> calcPotentialDerivatives(const float* field) = 0;
 
 
+};
+
+
+
+///////////////////////////////////////////  Null Potential  ////////////////////////////////////////////////////
+// Trivial version of Potential, where all functions either return zero(s) or do nothing.
+
+class NullPotential:
+    public Potential
+{
+private:
+
+    //////////////////////////////////////////  Variables  ///////////////////////////////////////////////
+
+    const unsigned &numScalarComponents;
+
+public:
+
+    ////////////////////////////////////  Constructors/Destructors  //////////////////////////////////////
+
+    NullPotential(const unsigned &num_scalar_components);
+    virtual ~NullPotential();
+
+    ///////////////////////////////////////  Public Functions  ///////////////////////////////////////////
+
+    float calcPotentialEnergy(const float* field) const;
+
+    std::vector<double> calcPotentialDerivatives(const float* field);
 };

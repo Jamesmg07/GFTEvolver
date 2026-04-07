@@ -95,6 +95,13 @@ namespace Gradients {
         unsigned getDefaultStencilSize() const;
 
         /*
+        * Get the number of constraint equations (due to the fixing of the temporal gauge) that should be satisfied throughout.
+        * 
+        * @return        unsigned                                             The number of constraint equations.
+        */
+        unsigned getNumberOfConstraintEquations() const;
+
+        /*
         * Calculates the gradient energy.
         * 
         * @param        vector<vector<float*>> &scalar_pointers                 Array of pointers to the scalar fields at the required grid positions.

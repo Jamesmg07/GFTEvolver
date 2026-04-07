@@ -8,17 +8,6 @@ class Gradient
 {
 private:
 
-    ////////////////////////////////////////////  Initialisers  /////////////////////////////////////////////
-
-    /*
-     * Pure virtual function that must be defined in each child class.
-     * Intended use is to load in the parameters relating to the gradient term.
-     * 
-     * @param        string path                Path to the config file.
-     * @param        bool debug                 Outputs loaded parameters if true.
-     */
-    virtual void configure(const std::string path, const bool debug = false) = 0;
-
 protected:
 
     ////////////////////////////////////////////  Variables  ///////////////////////////////////////////////
@@ -56,12 +45,20 @@ public:
 
     /*
      * Pure virtual function that must be defined in each child class.
+     * Intended use is to return the number of constraint equations (due to the fixing of the temporal gauge) that should be satisfied throughout.
+     * 
+     * @return        unsigned                                             The number of constraint equations.
+     */
+    virtual unsigned getNumberOfConstraintEquations() const = 0;
+
+    /*
+     * Pure virtual function that must be defined in each child class.
      * Intended use is to calculate the gradient energy term.
      * 
      * @param        vector<vector<float*>> &scalar_pointers                Array of pointers to the scalar fields at the required grid positions.
      * @param        vector<vector<float*>> &vector_pointers                Array of pointers to the vector fields at the required grid positions.
      * 
-     * @return       float                                                   The gradient energy (density) at this position.
+     * @return       float                                                  The gradient energy (density) at this position.
      */
     virtual float calcGradientEnergy(const std::vector<std::vector<const float*>> &scalar_pointers, 
                                      const std::vector<std::vector<const float*>> &vector_pointers) const = 0;
@@ -111,5 +108,51 @@ public:
      */
     virtual std::vector<double> calcCurrents(const std::vector<std::vector<const float*>> &scalar_pointers, 
                                              const std::vector<std::vector<const float*>> &vector_pointers) const = 0;
+
+};
+
+
+
+//////////////////////////////////////////////  Null Gradient  //////////////////////////////////////////////////
+// Trivial version of Gradient, where all functions either do nothing or return zero(s).
+
+class NullGradient:
+    public Gradient
+{
+private:
+
+    ///////////////////////////////////////////  Variables  /////////////////////////////////////////////////////
+
+    const unsigned &numScalarComponents, &numVectorComponents;
+
+    //////////////////////////////////////////  Initialisers  ///////////////////////////////////////////////////
+
+    void configure(const std::string path, const bool debug = false);
+
+public:
+
+    /////////////////////////////////////  Constructors/Destructors  ////////////////////////////////////////////
+
+    NullGradient(const unsigned &num_scalar_components, const unsigned &num_vector_components);
+    virtual ~NullGradient();
+
+    /////////////////////////////////////////  Public Functions  ////////////////////////////////////////////////
+
+    unsigned getDefaultStencilSize() const;
+    
+    unsigned getNumberOfConstraintEquations() const;
+
+    float calcGradientEnergy(const std::vector<std::vector<const float*>> &scalar_pointers, 
+                             const std::vector<std::vector<const float*>> &vector_pointers) const;
+
+    float calcKineticEnergy(const float* const local_scalar_fields[2]) const;
+
+    std::vector<float> calcConstraintContributions(const float* const local_scalar_fields[2]) const;
+
+    std::vector<double> calcDerivatives(const std::vector<std::vector<const float*>> &scalar_pointers, 
+                                        const std::vector<std::vector<const float*>> &vector_pointers) const;
+
+    std::vector<double> calcCurrents(const std::vector<std::vector<const float*>> &scalar_pointers, 
+                                     const std::vector<std::vector<const float*>> &vector_pointers) const;
 
 };

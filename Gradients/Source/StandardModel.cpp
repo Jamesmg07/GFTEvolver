@@ -207,6 +207,11 @@ unsigned Gradients::StandardModel::getDefaultStencilSize() const
     return this->stencils[0][0].size()/2;
 }
 
+unsigned Gradients::StandardModel::getNumberOfConstraintEquations() const
+{
+    return 4U;
+}
+
 
 float Gradients::StandardModel::calcGradientEnergy(const std::vector<std::vector<const float *>> &scalar_pointers,
                                                    const std::vector<std::vector<const float *>> &vector_pointers) const

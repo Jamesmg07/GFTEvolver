@@ -16,9 +16,10 @@ void Model::initPotential(const int &potential_type, const unsigned &num_scalar_
 {
     switch (potential_type)
     {
-    case UNASSIGNED_POTENTIAL:
+    case NULL_POTENTIAL:
 
-        std::cout << "MODEL::ERROR: A potential has not been assigned to the model.\n" << std::endl;
+        this->potential = new NullPotential(num_scalar_components);
+        std::cout << "MODEL::WARNING: Using null potential, all contributions will be zero.\n" << std::endl;
         break;
 
     case SO_N_POTENTIAL:
@@ -26,14 +27,14 @@ void Model::initPotential(const int &potential_type, const unsigned &num_scalar_
         this->potential = new SO_N(num_scalar_components);
         break;
 
-    case TWO_HDM_POTENTIAL:
+    case DOUBLE_SO_N_POTENTIAL:
 
-        std::cout << "MODEL::ERROR: The potential type has been chosen to be the 2HDM, but this feature has not been added yet.\n" << std::endl;
+        this->potential = new Double_SO_N(num_scalar_components);
         break;
 
     default:
 
-        std::cout << "MODEL::ERROR: The chosen potential type (" << potential_type << ") is invalid.\n" << std::endl;
+        throw std::runtime_error("MODEL:: The chosen potential type (" + std::to_string(potential_type) + ") is invalid.");
         break;
 
     }
@@ -48,9 +49,10 @@ void Model::initGradient(
 {
     switch (gradient_type)
     {
-    case UNASSIGNED_GRADIENT:
+    case NULL_GRADIENT:
 
-        std::cout << "MODEL::ERROR: A gradient has not been assigned to the model.\n" << std::endl;
+        this->gradient = new NullGradient(num_scalar_components, num_vector_components);
+        std::cout << "MODEL::WARNING: Using null gradient, all contributions will be zero.\n" << std::endl;
         break;
 
     case GLOBAL_GRADIENT:
@@ -69,7 +71,7 @@ void Model::initGradient(
 
     default:
 
-        std::cout << "MODEL::ERROR: The chosen gradient type (" << gradient_type << ") is invalid.\n" << std::endl;
+        throw std::runtime_error("MODEL::ERROR: The chosen gradient type (" + std::to_string(gradient_type) + ") is invalid.");
         break;
 
     }
@@ -80,11 +82,10 @@ void Model::initWilsonLoop(const int &wilson_loop_type, const unsigned &num_vect
 {
     switch (wilson_loop_type)
     {
-    case UNASSIGNED_WILSON_LOOP:
+    case NULL_WILSON_LOOP:
 
-        // Print out a warning, but this is okay in some cases, e.g the global model.
-
-        std::cout << "MODEL::WARNING: A wilson loop has not been assigned to the model.\n" << std::endl;
+        this->wilsonLoop = new NullWilsonLoop(num_vector_components);
+        std::cout << "MODEL::WARNING: Using null wilson loop, all contributions will be zero.\n" << std::endl;
         break;
 
     case SM_WILSON_LOOP:
@@ -94,7 +95,7 @@ void Model::initWilsonLoop(const int &wilson_loop_type, const unsigned &num_vect
 
     default:
 
-        std::cout << "MODEL::ERROR: The chosen wilson loop type (" << wilson_loop_type << ") is invalid.\n" << std::endl;
+        throw std::runtime_error("MODEL: The chosen wilson loop type (" + std::to_string(wilson_loop_type) + ") is invalid.");
         break;
 
     }
@@ -138,9 +139,9 @@ void Model::configure(
 
     std::ifstream ifs(path);
 
-    int potential_type = UNASSIGNED_POTENTIAL;
-    int gradient_type = UNASSIGNED_GRADIENT;
-    int wilson_loop_type = UNASSIGNED_WILSON_LOOP;
+    int potential_type = NULL_POTENTIAL;
+    int gradient_type = NULL_GRADIENT;
+    int wilson_loop_type = NULL_WILSON_LOOP;
 
 
     // Read in the parameter values from the configuration file
@@ -156,6 +157,7 @@ void Model::configure(
         this->initPotential(potential_type, num_scalar_components);
 
         // Load chosen gradient type and set-up the chosen gradient.
+        std::getline(ifs, description);
         std::getline(ifs, description,':');
         ifs >> gradient_type;
         this->initGradient(
@@ -237,7 +239,14 @@ unsigned Model::getDefaultStencilSize() const
 
 unsigned Model::getNumberOfConstraintEquations() const
 {
-    return this->wilsonLoop->getNumberOfConstraintEquations();
+    unsigned gradient_num_constraints = this->gradient->getNumberOfConstraintEquations();
+    unsigned loop_num_constraints = this->wilsonLoop->getNumberOfConstraintEquations();
+
+    if (gradient_num_constraints != loop_num_constraints)
+        throw std::runtime_error("MODEL: The number of constraint equations expected by the gradients (" + std::to_string(gradient_num_constraints)
+                                + ") does not match the number expected by the wilson loops (" + std::to_string(loop_num_constraints) + ").");
+
+    return loop_num_constraints;
 }
 
 void Model::calcPotentialContributions(const float *const local_scalar_fields)

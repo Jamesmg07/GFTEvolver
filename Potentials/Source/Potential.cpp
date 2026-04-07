@@ -9,3 +9,32 @@ Potential::Potential()
 Potential::~Potential()
 {
 }
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//                                             Null Potential                                                     //
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+///////////////////////////////////////  Constructors/Destructors  /////////////////////////////////////////////////
+
+NullPotential::NullPotential(const unsigned &num_scalar_components)
+    : numScalarComponents(num_scalar_components)
+{
+}
+
+NullPotential::~NullPotential()
+{
+}
+
+///////////////////////////////////////////  Public Functions  /////////////////////////////////////////////////////
+
+float NullPotential::calcPotentialEnergy(const float *field) const
+{
+    return 0.0f;
+}
+
+std::vector<double> NullPotential::calcPotentialDerivatives(const float *field)
+{
+    return std::vector<double>(this->numScalarComponents, 0.0);
+}
