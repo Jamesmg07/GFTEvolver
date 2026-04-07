@@ -29,6 +29,17 @@ public:
 
     /*
      * Pure virtual function that must be defined in each child class.
+     * Intended use is to return the number of evolution equations for the vector fields.
+     * This can differ from the number of vector field components if there is some redundancy in the description of the gauge fields.
+     * It would use less memory to eliminate this redundancy but this may come at the cost of numerical accuracy so that may not always
+     * be the preferred approach.
+     * 
+     * @return        unsigned                                              The number of evolution equations.
+     */
+    virtual unsigned getNumberOfEvolutionEquations() const = 0;
+
+    /*
+     * Pure virtual function that must be defined in each child class.
      * Intended use is to return the number of constraint equations (due to the fixing of the temporal gauge) that should be satisfied throughout.
      * 
      * @return        unsigned                                              The number of constraint equations.
@@ -136,6 +147,8 @@ public:
     ////////////////////////////////////////  Public Functions  ////////////////////////////////////////////
 
     float getSqrCouplings(const unsigned comp_iter) const;
+
+    unsigned getNumberOfEvolutionEquations() const;
 
     unsigned getNumberOfConstraintEquations() const;
 

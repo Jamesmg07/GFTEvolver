@@ -10,6 +10,7 @@ void Model::initVariables()
     this->dampingFactor = 0.f;
     this->ntDamped = 0;
     this->currentDamping = 0.f;
+    this->numVectorEqs = 0;
 }
 
 void Model::initPotential(const int &potential_type, const unsigned &num_scalar_components)
@@ -99,6 +100,11 @@ void Model::initWilsonLoop(const int &wilson_loop_type, const unsigned &num_vect
         break;
 
     }
+
+    // Establish the number of vector equations.
+    // In principle this can be different from the number of vector components if there is a convenient representation for them that has redundancies.
+    this->numVectorEqs = this->wilsonLoop->getNumberOfEvolutionEquations();
+
 }
 
 //////////////////////////////  Constructors/Destructors  //////////////////////////////////////////
@@ -339,13 +345,8 @@ void Model::evolve(float *const local_scalar_fields[2], float *const local_vecto
     // This depends upon the wilson loop set-up, so evolution will be done within that class.
     if (this->evolveGauge)
     {
-        // Approach using 3 dofs:
-        //unsigned num_eq_components = num_vector_components;
-
-        // Approach using 4 dofs:
-        unsigned num_eq_components = num_vector_components - 3;
-        std::vector<double> vector_equation_RHS (num_eq_components, 0.f);
-        for (unsigned comp_iter = 0; comp_iter < num_eq_components; comp_iter++)
+        std::vector<double> vector_equation_RHS (this->numVectorEqs, 0.f);
+        for (unsigned comp_iter = 0; comp_iter < this->numVectorEqs; comp_iter++)
         {
             vector_equation_RHS[comp_iter] = (1.0 - this->currentDamping*dt)*this->wilsonLoopElectricContributions[comp_iter]
                                         + dt*dt*(this->wilsonLoopMagneticContributions[comp_iter] 

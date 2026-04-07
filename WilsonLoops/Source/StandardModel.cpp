@@ -210,6 +210,11 @@ float WilsonLoops::StandardModel::getSqrCouplings(const unsigned comp_iter) cons
         return this->g_sqr;
 }
 
+unsigned WilsonLoops::StandardModel::getNumberOfEvolutionEquations() const
+{
+    return 12U;
+}
+
 unsigned WilsonLoops::StandardModel::getNumberOfConstraintEquations() const
 {
     // There is one constraint equation for the hypercharge and 3 for the isospin.

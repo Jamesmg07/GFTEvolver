@@ -36,6 +36,7 @@ private:
     unsigned ntDamped;
     float dampingFactor;
     float currentDamping;
+    unsigned numVectorEqs;
     bool evolveGauge;
 
     // Contributions to the equations of motion (at one position) from the potential, gradients and wilson loops.

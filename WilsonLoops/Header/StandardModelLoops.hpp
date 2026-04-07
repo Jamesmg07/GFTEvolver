@@ -98,6 +98,13 @@ namespace WilsonLoops{
         float getSqrCouplings(const unsigned comp_iter) const;
 
         /*
+        * Returns the number of evolution equations for the vector fields.
+        * 
+        * @return        unsigned                                              The number of evolution equations.
+        */
+        unsigned getNumberOfEvolutionEquations() const;
+
+        /*
         * Returns the number of constraint equations (due to the fixing of the temporal gauge) that should be satisfied throughout.
         * 
         * @return        unsigned                                              The number of constraint equations.

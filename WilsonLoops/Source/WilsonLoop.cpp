@@ -35,6 +35,11 @@ float NullWilsonLoop::getSqrCouplings(const unsigned comp_iter) const
     return 0.0f;
 }
 
+unsigned NullWilsonLoop::getNumberOfEvolutionEquations() const
+{
+    return 0;
+}
+
 unsigned NullWilsonLoop::getNumberOfConstraintEquations() const
 {
     return 0;
