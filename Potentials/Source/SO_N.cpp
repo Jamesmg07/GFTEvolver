@@ -54,17 +54,12 @@ SO_N::~SO_N()
 
 //////////////////////////////////////////////  Public functions  //////////////////////////////////////////////////
 
-float SO_N::calcPotentialEnergy(const float *field) const
-{
-    return 0.25f*this->lambda*powf(this->fieldSqrMagnitude - this->etaSqr, 2);
-}
-
 std::vector<double> SO_N::calcPotentialDerivatives(const float *field)
 {
-    std::vector<double> potential_contributions(this->numComponents, 0.f);
+    std::vector<double> potential_contributions(this->numComponents, 0.0);
 
     // Calculate the |field|^2 and save it for possible later use in calculating the potential energy.
-    this->fieldSqrMagnitude = 0.f;
+    this->fieldSqrMagnitude = 0.0;
     for (int iter = 0; iter < this->numComponents; iter++)
     {
         this->fieldSqrMagnitude += std::pow(static_cast<double>(field[iter]), 2);
@@ -77,4 +72,10 @@ std::vector<double> SO_N::calcPotentialDerivatives(const float *field)
     }
 
     return potential_contributions;
+}
+
+// Assumed that this runs after above, so that fieldSqrMagnitude may be reused.
+float SO_N::calcPotentialEnergy(const float *field) const
+{
+    return 0.25f*this->lambda*powf(this->fieldSqrMagnitude - this->etaSqr, 2);
 }

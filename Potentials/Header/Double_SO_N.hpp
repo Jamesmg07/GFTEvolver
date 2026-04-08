@@ -16,6 +16,8 @@ private:
     double m1, m2, m12r, m12i;
     double l1, l2, l3, l4p5, l4m5, l5i, l6r, l6i, l7r, l7i;
 
+    bool breakToSON, breakToUHalfN;
+
     // Quantities that regularly appear in the calculations. 
     double fieldSqrMagnitude[2], fieldsDot, fieldsAntisym;
 
@@ -33,6 +35,9 @@ private:
      * @param        bool debug                 Outputs loaded parameters if true.
      */
     void configure(const std::string path, const bool debug = false);
+
+    // Possibly add a function to determine the ground state of the potential.
+    // This may be quite computationally taxing but only needs to run once, then store potential energy of ground state to be subtracted.
 
 public:
 

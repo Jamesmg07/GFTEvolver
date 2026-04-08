@@ -20,6 +20,9 @@ void Double_SO_N::initVariables()
     this->l7r = 0;
     this->l7i = 0;
 
+    this->breakToSON = false;
+    this->breakToUHalfN = false;
+
     this->fieldSqrMagnitude[0] = 0;
     this->fieldSqrMagnitude[1] = 0;
     this->fieldsDot = 0;
@@ -62,12 +65,11 @@ void Double_SO_N::configure(const std::string path, const bool debug)
         ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
         // Turn on parameters that explicitly break the symmetry down to a single SO(N)?
-        bool break_to_SO_N = false;
         for (unsigned iter = 0; iter < 4; iter++) std::getline(ifs, description);
         std::getline(ifs, description, ':');
-        ifs >> break_to_SO_N;
+        ifs >> this->breakToSON;
 
-        if (break_to_SO_N)
+        if (this->breakToSON)
         {
             // Check that the number of field components are equal.
             if (this->numComponents[0] != this->numComponents[1])
@@ -87,12 +89,11 @@ void Double_SO_N::configure(const std::string path, const bool debug)
             ifs >> this->l6r >> this->l7r;
 
             // Turn on parameters that explicitly break the symmetry down to a single U(N/2)?
-            bool break_to_U_half_N = false;
             for (unsigned iter = 0; iter < 5; iter++) std::getline(ifs, description);
             std::getline(ifs, description, ':');
-            ifs >> break_to_U_half_N;
+            ifs >> this->breakToUHalfN;
 
-            if (break_to_U_half_N)
+            if (this->breakToUHalfN)
             {
                 // Check that the number of field components in f1 (=f2) is even.
                 if (this->numComponents[0]%2 != 0)
@@ -142,28 +143,142 @@ Double_SO_N::~Double_SO_N()
 
 //////////////////////////////////////////////  Public functions  //////////////////////////////////////////////////
 
-float Double_SO_N::calcPotentialEnergy(const float *field) const
-{
-    //return 0.25f*this->lambda*powf(this->fieldSqrMagnitude - this->etaSqr, 2);
-    return 0.f;
-}
-
 std::vector<double> Double_SO_N::calcPotentialDerivatives(const float *field)
 {
-    std::vector<double> potential_contributions(this->totalNumComponents, 0.f);
+    // Calculate the field magnitudes, the dot product of the two fields and the antisymmetric product (as defined in config) of the two fields.
+    for (unsigned field_iter = 0; field_iter < 2; field_iter++)
+    {
+        this->fieldSqrMagnitude[field_iter] = 0.0;
+        for (unsigned comp_iter = 0; comp_iter < this->numComponents[field_iter]; comp_iter++)
+        {
+            this->fieldSqrMagnitude[field_iter] += std::pow(static_cast<double>(field[field_iter*this->numComponents[0] + comp_iter]), 2);
+        }
 
-    // // Calculate the |field|^2 and save it for possible later use in calculating the potential energy.
-    // this->fieldSqrMagnitude = 0.f;
-    // for (int iter = 0; iter < this->numComponents; iter++)
-    // {
-    //     this->fieldSqrMagnitude += std::pow(static_cast<double>(field[iter]), 2);
-    // }
+        // Below assumes the fields have the same number of components
+        if (this->breakToSON)
+        {
+            this->fieldsDot = 0.0;
+            for (unsigned comp_iter = 0; comp_iter < this->numComponents[0]; comp_iter++)
+            {
+                this->fieldsDot += static_cast<double>(field[comp_iter])*static_cast<double>(field[this->numComponents[0] + comp_iter]);
+            }
 
-    // // Calculate potential contributions to the equations of motion.
-    // for (int iter = 0; iter < this->numComponents; iter++)
-    // {
-    //     potential_contributions[iter] = this->lambda*( this->fieldSqrMagnitude - this->etaSqr )*static_cast<double>(field[iter]);
-    // }
+            // Below additionally assumes the number of components is even
+            if (this->breakToUHalfN)
+            {
+                this->fieldsAntisym = 0.0;
+                for (unsigned comp_iter = 0; comp_iter < this->numComponents[0]/2; comp_iter++)
+                {
+                    this->fieldsAntisym += static_cast<double>(field[2*comp_iter])*static_cast<double>(field[this->numComponents[0] + 2*comp_iter + 1])
+                                         - static_cast<double>(field[2*comp_iter + 1])*static_cast<double>(field[this->numComponents[0] + 2*comp_iter]);
+                }
+            }
+        }
+    }
+
+
+
+    // Now that all field quantities have been updated, can calculate the contribution from the terms that do not explicitly break the symmetry.
+    std::vector<double> potential_contributions(this->totalNumComponents, 0.0);
+
+    // Start with f1:
+    for (unsigned comp_iter = 0; comp_iter < this->numComponents[0]; comp_iter++)
+    {
+        // Full symmetry contribution
+        potential_contributions[comp_iter] += ( -2.0*this->m1 + 4.0*this->l1*this->fieldSqrMagnitude[0] + 2.0*this->l3*this->fieldSqrMagnitude[1] 
+                                              )*static_cast<double>(field[comp_iter]);
+
+        // Single SO(N) contribution
+        if (this->breakToSON)
+        {
+            unsigned f2index = this->numComponents[0] + comp_iter;
+
+            potential_contributions[comp_iter] += ( -this->m12r + 2.0*this->l4p5*this->fieldsDot + this->l6r*this->fieldSqrMagnitude[0] 
+                                                + this->l7r*this->fieldSqrMagnitude[1] )*static_cast<double>(field[f2index])
+                                                + 2.0*this->l6r*this->fieldsDot*static_cast<double>(field[comp_iter]);
+
+            // U(N/2) contribution
+            if (this->breakToUHalfN)
+            {
+                int alternator = 1 - 2*(comp_iter%2); // +1 or -1
+                potential_contributions[comp_iter] += ( this->m12i + 2.0*this->l4m5*this->fieldsAntisym - 2.0*this->l5i*this->fieldsDot 
+                                                      - this->l6i*this->fieldSqrMagnitude[0] - this->l7i*this->fieldSqrMagnitude[1]
+                                                      )*alternator*static_cast<double>(field[f2index + alternator])
+                                                    - 2.0*this->l5i*this->fieldsAntisym*static_cast<double>(field[f2index])
+                                                    - 2.0*this->l6i*this->fieldsAntisym*static_cast<double>(field[comp_iter]);
+            }
+        }
+    }
+
+    // Now repeat for f2:
+    for (unsigned comp_iter = 0; comp_iter < this->numComponents[1]; comp_iter++)
+    {
+        unsigned f2index = this->numComponents[0] + comp_iter;
+
+        // Full symmetry contribution
+        potential_contributions[f2index] += ( -2.0*this->m2 + 4.0*this->l2*this->fieldSqrMagnitude[1] + 2.0*this->l3*this->fieldSqrMagnitude[0] )
+                                            * static_cast<double>(field[f2index]);
+
+        // Single SO(N) contribution
+        if (this->breakToSON)
+        {
+            potential_contributions[f2index] += ( this->m12r + 2.0*this->l4p5*this->fieldsDot + this->l6r*this->fieldSqrMagnitude[0]
+                                                + this->l7r*this->fieldSqrMagnitude[1] )*static_cast<double>(field[comp_iter])
+                                                + 2.0*this->l7r*this->fieldsDot*static_cast<double>(field[f2index]);
+
+            // U(N/2) contribution
+            if (this->breakToUHalfN)
+            {
+                int alternator = 1 - 2*(comp_iter%2);
+                potential_contributions[f2index] += -( this->m12i + 2.0*this->l4m5*this->fieldsAntisym - 2.0*this->l5i*this->fieldsDot
+                                                    - this->l6i*this->fieldSqrMagnitude[0] - this->l7i*this->fieldSqrMagnitude[1] 
+                                                    )*alternator*static_cast<double>(field[comp_iter + alternator])
+                                                    - 2.0*this->l5i*this->fieldsAntisym*static_cast<double>(field[comp_iter])
+                                                    - 2.0*this->l7i*this->fieldsAntisym*static_cast<double>(field[f2index]);
+            }
+        }
+    }
 
     return potential_contributions;
+}
+
+// V = V_full + V_single + V_U, where
+
+// V_full = -m1*|f1|^2 - m2*|f2|^2 + l1*|f1|^4 + l2*|f2|^4 + l3*|f1|^2|f2|^2,
+// which is the part of the potential that is symmetric under SO(N) x SO(M) symmetry. f1 is an N component field and f2 is an M component field.
+
+// In order for V_single to be used, f1 and f2 need to have the same number of components, as there will now just be a single SO(N) symmetry that
+// acts the same way on both fields. Potential parameters below will only be used if a boolean is set to true.
+
+// V_single = -m12r*f1^T*f2 + l4p5*(f1^T*f2)^2 + l6r*|f1|^2(f1^T*f2) + l7r*|f2|^2(f1^T*f2),
+// which are all of the terms that can be formed from dot products of the two field vectors (v^T*u should be understood to be the dot product of v and u).
+
+// The next part of the potential will further explicitly break the symmetry down to U(N/2), as it includes terms like f1^T*J*f2,
+// where J = I_{N/2} \otimes \epsilon and \epsilon is the 2x2 antisymmetric tensor. This seems like a slightly odd construction,
+// but in the language of complex (N/2)-tuples, it is simply Im(\Phi_1^\dagger\Phi_2), whereas f1^T*f2 is Re(\Phi_1^\dagger\Phi_2).
+
+// V_U = +m12i*f1^T*J*f2 + l4m5*(f1^T*Jf2)^2 - 2*l5i*(f1^T*f2)*(f1^T*J*f2) - l6i*|f1|^2*(f1^T*J*f2) - l7i*|f2|^2*(f1^T*J*f2).
+
+// Assumed that this runs after above, so that field magnitudes, dot and antisymmetric products can all be reused.
+float Double_SO_N::calcPotentialEnergy(const float *field) const
+{
+    // Full symmetry contribution
+    float potential = -this->m1*this->fieldSqrMagnitude[0] - this->m2*this->fieldSqrMagnitude[1] 
+                    + this->l1*std::pow(this->fieldSqrMagnitude[0], 2) + this->l2*std::pow(this->fieldSqrMagnitude[1], 2)
+                    + this->l3*this->fieldSqrMagnitude[0]*this->fieldSqrMagnitude[1];
+
+    // Single SO(N) contribution
+    if (this->breakToSON)
+    {
+        potential += -this->m12r*this->fieldsDot + this->l4p5*std::pow(this->fieldsDot, 2)
+                   + this->l6r*this->fieldSqrMagnitude[0]*this->fieldsDot + this->l7r*this->fieldSqrMagnitude[1]*this->fieldsDot;
+
+        if (this->breakToUHalfN)
+        {
+            potential += this->m12i*this->fieldsAntisym + this->l4m5*std::pow(this->fieldsAntisym, 2) - 2.0*this->l5i*this->fieldsDot*this->fieldsAntisym
+                       - this->l6i*this->fieldSqrMagnitude[0]*this->fieldsAntisym - this->l7i*this->fieldSqrMagnitude[1]*this->fieldsAntisym;
+        }
+    }
+
+    return potential;
 }

@@ -41,6 +41,15 @@ public:
     ///////////////////////////////////////////  Public Functions  //////////////////////////////////////////////
 
     /*
+     * Calculates the contribution from the potential to each equation of motion.
+     * 
+     * @param        float* field                Pointer to the scalar fields at this position.
+     * 
+     * @return       vector<double>              Array containing the contribution to each equation of motion.  
+     */
+    std::vector<double> calcPotentialDerivatives(const float* field);
+
+    /*
      * Calculates the potential energy density at this location in the lattice.
      * Assumes that the square magnitude of the field has already been calculated by the
      * calcPotentialDerivatives function.
@@ -51,12 +60,4 @@ public:
      */
     float calcPotentialEnergy(const float* field) const;
 
-    /*
-     * Calculates the contribution from the potential to each equation of motion.
-     * 
-     * @param        float* field                Pointer to the scalar fields at this position.
-     * 
-     * @return       vector<double>              Array containing the contribution to each equation of motion.  
-     */
-    std::vector<double> calcPotentialDerivatives(const float* field);
 };
