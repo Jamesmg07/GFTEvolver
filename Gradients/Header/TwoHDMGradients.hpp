@@ -5,7 +5,7 @@
 #include <cmath>
 #include <iomanip>
 
-// Handles all details relating to the covariant derivative, as used in the standard model.
+// Handles all details relating to the covariant derivative, as used in the 2HDM.
 
 namespace Gradients {
 
@@ -27,7 +27,7 @@ namespace Gradients {
         ////////////////////////////////////////////  Initialisers  /////////////////////////////////////////////
 
         /*
-        * Loads in the parameters relating to the standard model covariant derivatives.
+        * Loads in the parameters relating to the 2HDM covariant derivatives.
         * 
         * @param        string path                Path to the config file.
         * @param        bool debug                 Outputs loaded parameters if true.
@@ -40,6 +40,7 @@ namespace Gradients {
         * Takes in the scalar field and transforms it under the action of a given link variable.
         * The first component of the vector_field is the hypercharge phase, y_i in e^{iy_i}.
         * The next three are the isospin, w_i^a in e^{iw_i^a\sigma^a}.
+        * Next can either be one or three based on whether the Higgs family has a gauged U(1) or SU(2).
         * There are three sets of these, corresponding to the three spatial directions.
         * 
         * @param        vector<double> &scalar_fields                Scalar fields at a given position.

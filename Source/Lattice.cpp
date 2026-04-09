@@ -307,19 +307,19 @@ void Lattice::initFields()
     long long unsigned vector_array_size = 2ULL*this->nx*this->ny*this->nz*this->numVectorFieldComponents;
     this->vectorFields.resize(vector_array_size, 0.f);
 
-    // Temporary extra step to get quaternion form of SU(2) to be initialised correctly.
-    if (this->numVectorFieldComponents == 15U)
-    {
-        for (long long unsigned loc_iter = 0; loc_iter < 2ULL*this->nx*this->ny*this->nz; loc_iter++)
-        {
-            for (unsigned dir_iter = 0; dir_iter < 3; dir_iter++)
-            {
-                this->vectorFields[(3ULL*loc_iter + 1ULL*dir_iter)*5ULL + 1ULL] = 1.f;
-            }
-        }
+    // Temporary extra step to get quaternion form of SU(2) to be initialised correctly in SM.
+    // if (this->numVectorFieldComponents == 15U)
+    // {
+    //     for (long long unsigned loc_iter = 0; loc_iter < 2ULL*this->nx*this->ny*this->nz; loc_iter++)
+    //     {
+    //         for (unsigned dir_iter = 0; dir_iter < 3; dir_iter++)
+    //         {
+    //             this->vectorFields[(3ULL*loc_iter + 1ULL*dir_iter)*5ULL + 1ULL] = 1.f;
+    //         }
+    //     }
 
-        std::cout << "LATTICE::INITFIELDS:: Warning: Setting c0 component to 1 as a test." << std::endl;
-    }
+    //     std::cout << "LATTICE::INITFIELDS:: Warning: Setting c0 component to 1 as a test." << std::endl;
+    // }
 
     // Generate the initial conditions
     if(scalarInitialConditions)

@@ -104,6 +104,11 @@ void Model::initWilsonLoop(const int &wilson_loop_type, const unsigned &num_vect
         this->wilsonLoop = new WilsonLoops::StandardModel(num_vector_components, dt, dx, dy, dz);
         break;
 
+    case TWOHDM_WILSON_LOOP:
+
+        this->wilsonLoop = new WilsonLoops::TwoHDM(num_vector_components, dt, dx, dy, dz);
+        break;
+
     default:
 
         throw std::runtime_error("MODEL: The chosen wilson loop type (" + std::to_string(wilson_loop_type) + ") is invalid.");
@@ -178,6 +183,7 @@ void Model::configure(
         ifs >> gradient_type;
 
         // Load chosen wilson loop type and set-up the chosen wilson loop.
+        std::getline(ifs, description);
         std::getline(ifs, description, ':');
         ifs >> wilson_loop_type;
         this->initWilsonLoop(wilson_loop_type, num_vector_components, dt, dx, dy, dz);
@@ -342,17 +348,14 @@ void Model::evolve(float *const local_scalar_fields[2], float *const local_vecto
     // This depends upon the wilson loop set-up, so evolution will be done within that class.
     if (this->evolveGauge)
     {
-        std::vector<double> vector_equation_RHS(this->numVectorEqs, 0.f);
+        std::vector<double> vector_equation_RHS(this->numVectorEqs, 0.0);
         for (unsigned comp_iter = 0; comp_iter < this->numVectorEqs; comp_iter++)
         {
             vector_equation_RHS[comp_iter] = (1.0 - this->currentDamping*dt)*this->wilsonLoopElectricContributions[comp_iter]
                                         + dt*dt*(this->wilsonLoopMagneticContributions[comp_iter] 
                                         + this->wilsonLoop->getSqrCouplings(comp_iter)*this->currentContributions[comp_iter]);
 
-            //std::cout << this->wilsonLoop->getSqrCouplings(comp_iter) << " " << this->currentContributions[comp_iter] << std::endl;
-
-            // std::cout << comp_iter << ": " << this->wilsonLoopTemporalContributions[comp_iter] << " " << this->wilsonLoopSpatialContributions[comp_iter] 
-            //           << " " << this->currentContributions[comp_iter] << std::endl;
+            //std::cout << comp_iter << ": " << this->wilsonLoop->getSqrCouplings(comp_iter) << ", " << this->currentContributions[comp_iter] << ", " << this->wilsonLoopElectricContributions[comp_iter] << ", " << this->wilsonLoopMagneticContributions[comp_iter] << std::endl;
         }
 
         this->wilsonLoop->evolve(local_vector_fields, vector_equation_RHS);

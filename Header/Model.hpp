@@ -14,6 +14,7 @@
 
 #include "WilsonLoop.hpp"
 #include "StandardModelLoops.hpp"
+#include "TwoHDMLoops.hpp"
 
 enum Potential_Types {NULL_POTENTIAL = 0, SO_N_POTENTIAL, DOUBLE_SO_N_POTENTIAL};
 enum Gradient_Types {NULL_GRADIENT = 0, GLOBAL_GRADIENT, SM_GRADIENT, TWOHDM_GRADIENT};

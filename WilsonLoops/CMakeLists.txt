@@ -8,6 +8,7 @@ set(
   SOURCES
   "${CMAKE_CURRENT_SOURCE_DIR}/Source/WilsonLoop.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/Source/StandardModel.cpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/Source/TwoHDM.cpp"
 )
 
 # Create a library

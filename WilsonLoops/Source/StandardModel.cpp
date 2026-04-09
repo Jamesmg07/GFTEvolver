@@ -21,13 +21,10 @@ void WilsonLoops::StandardModel::configure(const std::string path, const bool de
         std::getline(ifs, description, ':');
         ifs >> g;
         this->g_sqr = g*g;
-        this->inverse_g_sqr = 1.0/this->g_sqr;
 
         std::getline(ifs, description, ':');
         ifs >> gp;
         this->gp_sqr = gp*gp;
-        this->inverse_gp_sqr = 1.0/this->gp_sqr;
-
 
         std::getline(ifs, description);
         std::getline(ifs, description, ':');
@@ -56,6 +53,18 @@ void WilsonLoops::StandardModel::initVariables()
     this->inverse_sqr_spacings[2] = 1.f/(this->dz*this->dz);
 
     this->inverse_sqr_dt = 1.f/(this->dt*this->dt);
+
+    // Pre-calculate inverses of the gauge couplings (only affects the energy)
+    // They will be set to zero if the squared gauge couplings are smaller than the division by zero tolerance.
+    if (this->g_sqr > this->divisionByZeroTolerance)
+        this->inverse_g_sqr = 1.0/this->g_sqr;
+    else
+        this->inverse_g_sqr = 0.0;
+    
+    if (this->gp_sqr > this->divisionByZeroTolerance)
+        this->inverse_gp_sqr = 1.0/this->gp_sqr;
+    else
+        this->inverse_gp_sqr = 0.0;
 
     // Set boolean output for the energy calculations to false.
     this->storeEnergy = false;
@@ -214,7 +223,6 @@ bool WilsonLoops::StandardModel::isUsingGeneratorRepresentation() const
 
 float WilsonLoops::StandardModel::getSqrCouplings(const unsigned comp_iter) const
 {
-    // 3 dof su2 representation
     if (comp_iter%4 == 0)
         return this->gp_sqr;
     else
@@ -318,7 +326,7 @@ std::vector<double> WilsonLoops::StandardModel::calcMagneticContributions(const 
     // WARNING:: THIS CURRENTLY ASSUMES THAT THE STENCIL BEING USED IS ALWAYS 3-POINT. WILL NEED TO MAKE SOME ALTERATIONS TO GET IT TO WORK FOR
     // OTHER STENCILS!
 
-    std::vector<double> contribution(12, 0.f);
+    std::vector<double> contribution(12, 0.0);
 
     for (unsigned dir1_iter = 0; dir1_iter < 3; dir1_iter++) // This loops over the components which will be evolved
     {
@@ -391,10 +399,6 @@ std::vector<double> WilsonLoops::StandardModel::calcMagneticContributions(const 
                         this->inverse_g_sqr*(1.0 - U_product1[0]) 
                       + this->inverse_gp_sqr*(1.0 - std::cos(local_loop_angle))
                     );
-
-                if (this->storedMagneticEnergy < 0)
-                    std::cout << 1.0 - U_product1[0] << std::endl;
-
             }
 
             // Otherwise there is no contribution
@@ -407,7 +411,7 @@ std::vector<double> WilsonLoops::StandardModel::calcMagneticContributions(const 
 
 std::vector<double> WilsonLoops::StandardModel::calcElectricContributions(const float *const local_vector_fields[2]) const
 {
-    std::vector<double> contribution(12, 0.f);
+    std::vector<double> contribution(12, 0.0);
 
     for (unsigned dir_iter = 0; dir_iter < 3; dir_iter++)
     {
@@ -435,7 +439,7 @@ std::vector<double> WilsonLoops::StandardModel::calcElectricContributions(const 
         // If energy is being calculated, do some calculations now to avoid re-evaluations of wilson loops.
         if (this->storeEnergy)
         {
-            this->storedElectricEnergy += 4*this->inverse_sqr_spacings[dir_iter]*(
+            this->storedElectricEnergy += 4.0*this->inverse_sqr_spacings[dir_iter]*(
                 this->inverse_g_sqr*(1.0 - U_product[0]) 
               + this->inverse_gp_sqr*(1.0 - std::cos(loop_angle))
             );
@@ -502,9 +506,8 @@ void WilsonLoops::StandardModel::evolve(float *const local_vector_fields[2], std
         }
         else                                       // Approach when 4 dofs are stored:
         {
-
-        for (unsigned comp_iter = 0; comp_iter < 4; comp_iter++)
-            local_vector_fields[0][dir_index + comp_iter + 1] = U_product[comp_iter];
+            for (unsigned comp_iter = 0; comp_iter < 4; comp_iter++)
+                local_vector_fields[0][dir_index + comp_iter + 1] = U_product[comp_iter];
         }
 
     }

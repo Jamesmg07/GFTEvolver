@@ -191,7 +191,9 @@ std::vector<double> Gradients::TwoHDM::getSU2Representation(const float *const v
 std::vector<double> Gradients::TwoHDM::getScalarField(const float *const scalar_pointer) const
 {
     std::vector<double> scalar_field = {static_cast<double>(scalar_pointer[0]), static_cast<double>(scalar_pointer[1]), 
-                                        static_cast<double>(scalar_pointer[2]), static_cast<double>(scalar_pointer[3])};
+                                        static_cast<double>(scalar_pointer[2]), static_cast<double>(scalar_pointer[3]),
+                                        static_cast<double>(scalar_pointer[4]), static_cast<double>(scalar_pointer[5]),
+                                        static_cast<double>(scalar_pointer[6]), static_cast<double>(scalar_pointer[7])};
     return scalar_field;
 }
 
@@ -242,6 +244,8 @@ Gradients::TwoHDM::TwoHDM(
                                      " have been assigned.\n"
                                      "Note that 3 spatial dimensions are assumed so requested number of components is multiplied by 3 internally.");
     }
+
+    std::cout << "GRADIENTS::TWOHDM:: " << this->gaugeNum << std::endl;
 }
 
 Gradients::TwoHDM::~TwoHDM()
