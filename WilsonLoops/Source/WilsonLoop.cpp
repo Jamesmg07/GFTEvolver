@@ -30,6 +30,11 @@ NullWilsonLoop::~NullWilsonLoop()
 
 ////////////////////////////////////////////////  Public Functions  ///////////////////////////////////////////////
 
+bool NullWilsonLoop::isUsingGeneratorRepresentation() const
+{
+    return false;
+}
+
 float NullWilsonLoop::getSqrCouplings(const unsigned comp_iter) const
 {
     return 0.0f;

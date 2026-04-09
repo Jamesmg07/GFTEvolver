@@ -45,7 +45,8 @@ void Model::initGradient(
     const int &gradient_type,
     const unsigned &num_scalar_components, const unsigned &num_vector_components,
     const unsigned &nx, const unsigned &ny, const unsigned &nz,
-    const double &dt, const double &dx, const double &dy, const double &dz
+    const double &dt, const double &dx, const double &dy, const double &dz,
+    const bool using_generator_representation
 )
 {
     switch (gradient_type)
@@ -59,15 +60,24 @@ void Model::initGradient(
     case GLOBAL_GRADIENT:
 
         this->gradient = new Gradients::Global(num_scalar_components, num_vector_components,
-                                    nx, ny, nz,
-                                    dt, dx, dy, dz);
+                                               nx, ny, nz,
+                                               dt, dx, dy, dz);
         break;
 
     case SM_GRADIENT:
 
         this->gradient = new Gradients::StandardModel(num_scalar_components, num_vector_components,
-                                                   nx, ny, nz,
-                                                   dt, dx, dy, dz);
+                                                      nx, ny, nz,
+                                                      dt, dx, dy, dz,
+                                                      using_generator_representation);
+        break;
+
+    case TWOHDM_GRADIENT:
+
+        this->gradient = new Gradients::TwoHDM(num_scalar_components, num_vector_components,
+                                               nx, ny, nz,
+                                               dt, dx, dy, dz,
+                                               using_generator_representation);
         break;
 
     default:
@@ -162,22 +172,24 @@ void Model::configure(
         ifs >> potential_type;
         this->initPotential(potential_type, num_scalar_components);
 
-        // Load chosen gradient type and set-up the chosen gradient.
+        // Load chosen gradient type but delay the set-up until after the wilson loops have been set-up.
         std::getline(ifs, description);
         std::getline(ifs, description,':');
         ifs >> gradient_type;
-        this->initGradient(
-            gradient_type,
-            num_scalar_components, num_vector_components,
-            nx, ny, nz,
-            dt, dx, dy, dz
-        );
 
         // Load chosen wilson loop type and set-up the chosen wilson loop.
         std::getline(ifs, description, ':');
         ifs >> wilson_loop_type;
         this->initWilsonLoop(wilson_loop_type, num_vector_components, dt, dx, dy, dz);
 
+        // Set-up the gradient.
+        this->initGradient(
+            gradient_type,
+            num_scalar_components, num_vector_components,
+            nx, ny, nz,
+            dt, dx, dy, dz,
+            this->wilsonLoop->isUsingGeneratorRepresentation()
+        );
         
         // Load parameters of the damping term
         std::getline(ifs, description);
@@ -217,8 +229,7 @@ void Model::configure(
 
 void Model::energyPreparation(const bool store_energy) const
 {
-    if (wilsonLoop)
-        this->wilsonLoop->energyPreparation(store_energy);
+    this->wilsonLoop->energyPreparation(store_energy);
 }
 
 void Model::update(unsigned time_iter)
@@ -283,48 +294,34 @@ float Model::calcKineticEnergy(const float* const local_scalar_fields[2]) const
 
 void Model::calcYangMillsContributions(const std::vector<std::vector<const float *>> &vector_pointers, const float *const local_vector_fields[2])
 {
-    if (this->wilsonLoop)
-    {
-        this->wilsonLoopMagneticContributions = wilsonLoop->calcMagneticContributions(vector_pointers);
-        this->wilsonLoopElectricContributions = wilsonLoop->calcElectricContributions(local_vector_fields);
-    }
+    this->wilsonLoopMagneticContributions = wilsonLoop->calcMagneticContributions(vector_pointers);
+    this->wilsonLoopElectricContributions = wilsonLoop->calcElectricContributions(local_vector_fields);
 }
 
 float Model::calcMagneticEnergy(const std::vector<std::vector<const float *>> &vector_pointers) const
 {
-    if (this->wilsonLoop)
-        return this->wilsonLoop->calcMagneticEnergy(vector_pointers);
-    else
-        return 0.f;
+    return this->wilsonLoop->calcMagneticEnergy(vector_pointers);
 }
 
 float Model::calcElectricEnergy(const float *const local_vector_fields[2]) const
 {
-    if (this->wilsonLoop)
-        return this->wilsonLoop->calcElectricEnergy(local_vector_fields);
-    else
-        return 0.f;
+    return this->wilsonLoop->calcElectricEnergy(local_vector_fields);
 }
 
 std::vector<float> Model::calcConstraintViolation(const unsigned &num_equations, const long long int &t_future_index, 
                                                   const float *const local_scalar_fields[2], 
                                                   const std::vector<std::vector<const float *>> &vector_pointers) const
 {
-    if (this->wilsonLoop)
-    {
-        std::vector<float> violation(num_equations, 0.f);
-        std::vector<float> gradient_contribution = this->gradient->calcConstraintContributions(local_scalar_fields);
-        std::vector<float> electric_contribution = this->wilsonLoop->calcConstraintContributions(t_future_index, vector_pointers);
+    std::vector<float> violation(num_equations, 0.f);
+    std::vector<float> gradient_contribution = this->gradient->calcConstraintContributions(local_scalar_fields);
+    std::vector<float> electric_contribution = this->wilsonLoop->calcConstraintContributions(t_future_index, vector_pointers);
 
 
-        for (unsigned iter = 0; iter < num_equations; iter++)
-            violation[iter] = electric_contribution[iter] - this->wilsonLoop->getSqrCouplings(iter)*gradient_contribution[iter];
+    for (unsigned iter = 0; iter < num_equations; iter++)
+        violation[iter] = electric_contribution[iter] - this->wilsonLoop->getSqrCouplings(iter)*gradient_contribution[iter];
 
 
-        return violation;
-    }
-    else
-        return std::vector<float>();
+    return violation;
 }
 
 void Model::evolve(float *const local_scalar_fields[2], float *const local_vector_fields[2],
@@ -345,7 +342,7 @@ void Model::evolve(float *const local_scalar_fields[2], float *const local_vecto
     // This depends upon the wilson loop set-up, so evolution will be done within that class.
     if (this->evolveGauge)
     {
-        std::vector<double> vector_equation_RHS (this->numVectorEqs, 0.f);
+        std::vector<double> vector_equation_RHS(this->numVectorEqs, 0.f);
         for (unsigned comp_iter = 0; comp_iter < this->numVectorEqs; comp_iter++)
         {
             vector_equation_RHS[comp_iter] = (1.0 - this->currentDamping*dt)*this->wilsonLoopElectricContributions[comp_iter]
@@ -358,8 +355,7 @@ void Model::evolve(float *const local_scalar_fields[2], float *const local_vecto
             //           << " " << this->currentContributions[comp_iter] << std::endl;
         }
 
-        if (this->wilsonLoop)
-            this->wilsonLoop->evolve(local_vector_fields, vector_equation_RHS);
+        this->wilsonLoop->evolve(local_vector_fields, vector_equation_RHS);
     }
 
 }

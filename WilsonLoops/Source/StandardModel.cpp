@@ -73,30 +73,31 @@ std::vector<double> WilsonLoops::StandardModel::getSU2Representation(const float
     if (conjugate)
         conj_fac = -1;
 
-    // Approach when 3 dofs are stored:
+    if (this->usingGeneratorRepresentation)    // Approach when 3 dofs are stored
+    {
+        double w_mag = 0.0;
+        for (unsigned comp_iter = 1; comp_iter < 4; comp_iter++) // comp_iter starts at 1 because 0 is the hypercharge, which I don't care about here.
+            w_mag += std::pow(static_cast<double>(vector_pointer[dir_index + comp_iter]), 2);
 
-    // double w_mag = 0.0;
-    // for (unsigned comp_iter = 1; comp_iter < 4; comp_iter++) // comp_iter starts at 1 because 0 is the hypercharge, which I don't care about here.
-    //     w_mag += static_cast<double>(vector_pointer[dir_index + comp_iter])*static_cast<double>(vector_pointer[dir_index + comp_iter]);
+        w_mag = std::sqrt(w_mag);
+        c_representation[0] = std::cos(w_mag);
 
-    // w_mag = std::sqrt(w_mag);
-    // c_representation[0] = std::cos(w_mag);
-
-    // if (w_mag > this->divisionByZeroTolerance)
-    // {
-    //     for (unsigned comp_iter = 1; comp_iter < 4; comp_iter++)
-    //         c_representation[comp_iter] = conj_fac*std::sin(w_mag)*static_cast<double>(vector_pointer[dir_index + comp_iter])/w_mag;
-    // }
-    // else
-    // {
-    //     c_representation[1] = std::sin(w_mag); // Arbitrarily choose this direction.
-    // }
-
-    // Approach when 4 dofs are stored:
-
-    c_representation[0] = static_cast<double>(vector_pointer[dir_index + 1]);
-    for (int comp_iter = 2; comp_iter < 5; comp_iter++) // comp_iter starts at 2 because 0 is the hypercharge and 1 the c0 component.
-        c_representation[comp_iter-1] = static_cast<double>(conj_fac*vector_pointer[dir_index + comp_iter]);
+        if (w_mag > this->divisionByZeroTolerance)
+        {
+            for (unsigned comp_iter = 1; comp_iter < 4; comp_iter++)
+                c_representation[comp_iter] = conj_fac*std::sin(w_mag)*static_cast<double>(vector_pointer[dir_index + comp_iter])/w_mag;
+        }
+        else
+        {
+            c_representation[1] = std::sin(w_mag); // Arbitrarily choose this direction.
+        }
+    }
+    else                                       // Approach when 4 dofs are stored
+    {
+        c_representation[0] = static_cast<double>(vector_pointer[dir_index + 1]);
+        for (int comp_iter = 2; comp_iter < 5; comp_iter++) // comp_iter starts at 2 because 0 is the hypercharge and 1 the c0 component.
+            c_representation[comp_iter-1] = static_cast<double>(conj_fac*vector_pointer[dir_index + comp_iter]);
+    }
 
     return c_representation;
 }
@@ -183,15 +184,20 @@ std::vector<double> WilsonLoops::StandardModel::SU2Product(const std::vector<dou
 /////////////////////////////////////////  Constructors/Destructors  ///////////////////////////////////////
 
 WilsonLoops::StandardModel::StandardModel(const unsigned &num_vector_components, const double &dt, const double &dx, const double &dy, const double &dz)
-    : dt(dt), dx(dx), dy(dy), dz(dz)
+    : numVectorComponents(num_vector_components), dt(dt), dx(dx), dy(dy), dz(dz)
 {
     this->configure(std::string(SOURCE_DIR)+"/Config/StandardModel.cfg", true);
     this->initVariables();
 
-    if (num_vector_components != 12 && num_vector_components != 15)
+    if (this->numVectorComponents != 12 && this->numVectorComponents != 15)
         throw std::runtime_error("WILSONLOOPS::STANDARDMODEL:: Either 12 or 15 vector components are required (depending on whether the generator "
-                                "or quaternion representation is used) but " + std::to_string(num_vector_components) + " have been assigned.\n"
+                                "or quaternion representation is used) but " + std::to_string(this->numVectorComponents) + " have been assigned.\n"
                                 "Note that 3 spatial dimensions are assumed so requested number of components is multiplied by 3 internally.");
+
+    if (this->numVectorComponents == 12)
+        this->usingGeneratorRepresentation = true;
+    else
+        this->usingGeneratorRepresentation = false;
 }
 
 
@@ -200,6 +206,11 @@ WilsonLoops::StandardModel::~StandardModel()
 }
 
 /////////////////////////////////////////////  Public Functions  //////////////////////////////////////////
+
+bool WilsonLoops::StandardModel::isUsingGeneratorRepresentation() const
+{
+    return this->usingGeneratorRepresentation;
+}
 
 float WilsonLoops::StandardModel::getSqrCouplings(const unsigned comp_iter) const
 {
@@ -262,13 +273,9 @@ std::vector<float> WilsonLoops::StandardModel::calcConstraintContributions(const
 
     for (unsigned dir_iter = 0; dir_iter < 3; dir_iter++)
     {
-        // Approach when using 3 dofs:
-        //unsigned dir_index = dir_iter*4;
 
-        // Approach when using 4 dofs:
-        int dir_index = dir_iter*5;
+        int dir_index = dir_iter*this->numVectorComponents/3;
         long long int future_index = t_future_index + dir_index;
-
 
         // Hypercharge U(1) calculations:
         double local_loop_angle = static_cast<double>(vector_pointers[0][1][future_index]) 
@@ -315,24 +322,15 @@ std::vector<double> WilsonLoops::StandardModel::calcMagneticContributions(const 
 
     for (unsigned dir1_iter = 0; dir1_iter < 3; dir1_iter++) // This loops over the components which will be evolved
     {
-        // Approach when using 3 dofs:
-        //unsigned eq_dir_index = dir1_iter*4;
-        //unsigned dir1_index = dir1_iter*4; // 4 components for the standard model gauge fields.
-
-        // Approach when using 4 dofs:
         unsigned eq_dir_index = dir1_iter*4;
-        unsigned dir1_index = dir1_iter*5;
+        unsigned dir1_index = dir1_iter*this->numVectorComponents/3U;
 
         unsigned diag_index = 2;
         for (unsigned dir2_iter = 0; dir2_iter < 3; dir2_iter++) // This loops over other components which contribute through the loops
         {
             if (dir2_iter != dir1_iter)
             {
-                // Approach when using 3 dofs:
-                //unsigned dir2_index = dir2_iter*4;
-
-                // Approach when using 4 dofs:
-                unsigned dir2_index = dir2_iter*5;
+                unsigned dir2_index = dir2_iter*this->numVectorComponents/3U;
 
                 // Also need to work out where the grid position at +dir1 - dir2 is stored.
                 diag_index += 1;
@@ -413,13 +411,8 @@ std::vector<double> WilsonLoops::StandardModel::calcElectricContributions(const 
 
     for (unsigned dir_iter = 0; dir_iter < 3; dir_iter++)
     {
-        // Approach when using 3 dofs:
-        //unsigned eq_dir_index = dir_iter*4;
-        //unsigned dir_index = dir_iter*4;
-
-        // Approach when using 4 dofs:
         unsigned eq_dir_index = dir_iter*4;
-        unsigned dir_index = dir_iter*5;
+        unsigned dir_index = dir_iter*this->numVectorComponents/3U;
 
         // Hypercharge U(1) calculations:
 
@@ -461,13 +454,8 @@ void WilsonLoops::StandardModel::evolve(float *const local_vector_fields[2], std
     // I will refer to u_i = U_i(t+dt)U_i^\dagger(t) throughout (no sum over i), where the group U belongs to is implicit in the sections.
     for (unsigned dir_iter = 0; dir_iter < 3; dir_iter++)
     {
-        // Approach when using 3 dofs:
-        //unsigned vec_dir_index = dir_iter*4;
-        //unsigned eq_dir_index = dir_iter*4;
-
-        // Approach when using 4 dofs:
-        unsigned vec_dir_index = dir_iter*5;
         unsigned eq_dir_index = dir_iter*4;
+        unsigned dir_index = dir_iter*this->numVectorComponents/3U;
 
         // Hypercharge U(1) calculations:
 
@@ -476,8 +464,8 @@ void WilsonLoops::StandardModel::evolve(float *const local_vector_fields[2], std
 
         // WHAT IF |RHS| > 1??????
 
-        local_vector_fields[0][vec_dir_index] = static_cast<float>(std::asin(equation_RHS[eq_dir_index]) + static_cast<double>(local_vector_fields[1][vec_dir_index]));
-        //local_vector_fields[0][vec_dir_index] = static_cast<float>( equation_RHS[eq_dir_index] + static_cast<double>(local_vector_fields[1][vec_dir_index]) );
+        local_vector_fields[0][dir_index] = static_cast<float>(std::asin(equation_RHS[eq_dir_index]) + static_cast<double>(local_vector_fields[1][dir_index]));
+        //local_vector_fields[0][dir_index] = static_cast<float>( equation_RHS[eq_dir_index] + static_cast<double>(local_vector_fields[1][dir_index]) );
 
         if (std::pow(equation_RHS[eq_dir_index],2) > 1)
             std::cout << "Panic in evolve (rhs = " << equation_RHS[eq_dir_index] << " )" << std::endl;
@@ -499,23 +487,25 @@ void WilsonLoops::StandardModel::evolve(float *const local_vector_fields[2], std
             std::cout << "Panic in evolve (c_mag_sqr = " << c_mag_sqr << " )" << std::endl;
 
         std::vector<double> u_multiply = {std::sqrt(1.0 - c_mag_sqr), equation_RHS[eq_dir_index + 1], equation_RHS[eq_dir_index + 2], equation_RHS[eq_dir_index + 3]};
-        std::vector<double> U_product = this->getSU2Representation(local_vector_fields[1], vec_dir_index, false);
+        std::vector<double> U_product = this->getSU2Representation(local_vector_fields[1], dir_index, false);
 
         // Get the SU(2) matrix uU(t) in c_i^\mu form.
         U_product = this->SU2Product(u_multiply, U_product, true);
 
-        // Approach when 3 dofs are stored:
-
-        // Convert c_i^\mu form into w_i^a form.
-        // std::vector<float> U_next = this->invertSU2Representation(U_product);
-        
-        // for (unsigned comp_iter = 0; comp_iter < 3; comp_iter++)
-        //     local_vector_fields[0][dir_index + comp_iter + 1] = U_next[comp_iter];
-
-        // Approach when 4 dofs are stored:
+        if (this->usingGeneratorRepresentation)    // Approach when 3 dofs are stored:
+        {
+            // Convert c_i^\mu form into w_i^a form.
+            std::vector<float> U_next = this->invertSU2Representation(U_product);
+            
+            for (unsigned comp_iter = 0; comp_iter < 3; comp_iter++)
+                local_vector_fields[0][dir_index + comp_iter + 1] = U_next[comp_iter];
+        }
+        else                                       // Approach when 4 dofs are stored:
+        {
 
         for (unsigned comp_iter = 0; comp_iter < 4; comp_iter++)
-            local_vector_fields[0][vec_dir_index + comp_iter + 1] = U_product[comp_iter];
+            local_vector_fields[0][dir_index + comp_iter + 1] = U_product[comp_iter];
+        }
 
     }
 }

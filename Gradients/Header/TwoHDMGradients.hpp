@@ -9,7 +9,7 @@
 
 namespace Gradients {
 
-    class StandardModel:
+    class TwoHDM:
         public Gradient
     {
     private:
@@ -20,6 +20,8 @@ namespace Gradients {
         const double &dt, &dx, &dy, &dz;
         
         const bool usingGeneratorRepresentation;
+        unsigned gaugeNum; // 4 for SM, 5 for SM x U(1) and 7 for SM x SU(2)
+
         double divisionByZeroTolerance;
 
         ////////////////////////////////////////////  Initialisers  /////////////////////////////////////////////
@@ -57,11 +59,13 @@ namespace Gradients {
          * 
          * @param        float* vector_pointer                Pointer to the vector fields at a specific grid position.
          * @param        unsigned dir_index                   Selects which spatial component of the vector field to use.
+         * @param        unsigned offset                      Specifies where the SU(2) information resides in the array
          * @param        bool conjugate                       Conjugates the matrix if true.
          * 
          * @return       vector<double>                        The coefficents of the SU(2) representation described above.
          */
-        std::vector<double> getSU2Representation(const float* const vector_pointer, const unsigned dir_index, const bool conjugate) const;
+        std::vector<double> getSU2Representation(const float* const vector_pointer, const unsigned dir_index, const unsigned offset, 
+                                                 const bool conjugate) const;
 
         /*
         * Simply returns a vector containing all components of the scalar field, that are pointed to by the pointer.
@@ -76,13 +80,13 @@ namespace Gradients {
 
         //////////////////////////////////////  Constructors/Destructors  ////////////////////////////////////////
 
-        StandardModel(
+        TwoHDM(
             const unsigned &num_scalar_components, const unsigned &num_vector_components,
             const unsigned &nx, const unsigned &ny, const unsigned &nz,
             const double &dt, const double &dx, const double &dy, const double &dz,
             const bool using_generator_representation
         );
-        virtual ~StandardModel();
+        virtual ~TwoHDM();
 
 
         /////////////////////////////////////////  Public Functions  ////////////////////////////////////////////

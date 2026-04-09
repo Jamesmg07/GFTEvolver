@@ -9,6 +9,7 @@ set(
   "${CMAKE_CURRENT_SOURCE_DIR}/Source/Gradient.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/Source/Global.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/Source/StandardModel.cpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/Source/TwoHDM.cpp"
 )
 
 # Create a library

@@ -19,6 +19,16 @@ public:
 
     /*
      * Pure virtual function that must be defined in each child class.
+     * Intended use is to return whether the generator representation is being used for the gauge fields.
+     * This is written with SU(2) in mind, where it can be useful to use the quaternion representation instead.
+     * May need to be expanded later if there end up being more than two convenient representations for some group elements.
+     * 
+     * @return        bool                                                  True if using the generator representation.
+     */
+    virtual bool isUsingGeneratorRepresentation() const = 0;
+
+    /*
+     * Pure virtual function that must be defined in each child class.
      * Intended use is to return the relevant squares of the gauge couplings, for each component.
      * 
      * @param        unsigned comp_iter                                     Integer that decides which component of the gauge field.
@@ -145,6 +155,8 @@ public:
     virtual ~NullWilsonLoop();
 
     ////////////////////////////////////////  Public Functions  ////////////////////////////////////////////
+
+    bool isUsingGeneratorRepresentation() const;
 
     float getSqrCouplings(const unsigned comp_iter) const;
 

@@ -10,13 +10,14 @@
 #include "Gradient.hpp"
 #include "GlobalGradients.hpp"
 #include "StandardModelGradients.hpp"
+#include "TwoHDMGradients.hpp"
 
 #include "WilsonLoop.hpp"
 #include "StandardModelLoops.hpp"
 
 enum Potential_Types {NULL_POTENTIAL = 0, SO_N_POTENTIAL, DOUBLE_SO_N_POTENTIAL};
-enum Gradient_Types {NULL_GRADIENT = 0, GLOBAL_GRADIENT, SM_GRADIENT};
-enum Wilson_Loop_Types {NULL_WILSON_LOOP = 0, SM_WILSON_LOOP};
+enum Gradient_Types {NULL_GRADIENT = 0, GLOBAL_GRADIENT, SM_GRADIENT, TWOHDM_GRADIENT};
+enum Wilson_Loop_Types {NULL_WILSON_LOOP = 0, SM_WILSON_LOOP, TWOHDM_WILSON_LOOP};
 
 class Model
 {
@@ -74,12 +75,14 @@ private:
      * @param        unsigned &num_vector_components      Reference to the number of vector field components.
      * @param        unsigned &nx, &ny, &nz               References to the number of grid points in each direction.
      * @param        double &dt, &dx, &dy, &dz            References to the timestep size and lattice spacing in each direction.
+     * @param        bool usingGeneratorRepresentation    Boolean that specifies the generator representation of gauge fields are to be used.
      */
     void initGradient(
         const int& gradient_type,
         const unsigned &num_scalar_components, const unsigned &num_vector_components,
         const unsigned &nx, const unsigned &ny, const unsigned &nz,
-        const double &dt, const double &dx, const double &dy, const double &dz
+        const double &dt, const double &dx, const double &dy, const double &dz,
+        const bool usingGeneratorRepresentation
     );
 
     /*

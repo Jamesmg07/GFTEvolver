@@ -17,8 +17,10 @@ namespace WilsonLoops{
         ////////////////////////////////////////////////  Variables  ///////////////////////////////////////////////////
 
         double divisionByZeroTolerance;
+        const unsigned &numVectorComponents;
         const double &dt, &dx, &dy, &dz;
         double inverse_sqr_spacings[3], inverse_sqr_dt;
+        bool usingGeneratorRepresentation;
 
         double g_sqr, gp_sqr, inverse_g_sqr, inverse_gp_sqr;
 
@@ -87,6 +89,14 @@ namespace WilsonLoops{
         virtual ~StandardModel();
 
         //////////////////////////////////////////////  Public Functions  /////////////////////////////////////////////
+
+        /*
+        * Returns whether the generator representation is being used for the gauge fields.
+        * It can be useful to use the quaternion representation instead, which is what happens if false.
+        * 
+        * @return        bool                                                  True if using the generator representation.
+        */
+        bool isUsingGeneratorRepresentation() const;
 
         /*
         * Returns the relevant squares of the gauge couplings, for each component.

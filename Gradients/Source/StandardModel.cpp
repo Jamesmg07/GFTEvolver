@@ -88,35 +88,8 @@ std::vector<double> Gradients::StandardModel::transform(const std::vector<double
     }
 
     // Second step is to deal with the isospin transformation. First need to compute the matrix (without doing an infinite sum!).
-    // Use U_L = e^{iw_i^a\sigma^a} = \cos|w_i^a|\sigma^0 + i\sin|w_i^a|\hat{w}_i^a\sigma^a, where |w_i^a| is the sqrt of quadrature sum over a (not i!).
-
-    // double w_mag = 0.0;
-    // for (unsigned comp_iter = 1; comp_iter < 4; comp_iter++)
-    //     w_mag += std::pow(static_cast<double>(vector_pointer[dir_index + comp_iter]), 2);
-
-    // w_mag = std::sqrt(w_mag);
-
-    // double w_unit[3] = {0.0, 0.0, 0.0};
-    // if (w_mag > this->divisionByZeroTolerance)
-    // {
-    //     for (unsigned comp_iter = 0; comp_iter < 3; comp_iter++)
-    //         w_unit[comp_iter] = conj_fac*static_cast<double>(vector_pointer[dir_index + comp_iter + 1])/w_mag;
-    // }
-    // else
-    // {
-    //     w_unit[0] = 1.0; // Arbitrarily choose this direction.
-    // }
-
-    // // Perform the SU(2) transformation.
-    // transformed_field[0] = std::cos(w_mag)*hyper_field[0] + std::sin(w_mag)*(-w_unit[0]*hyper_field[3] + w_unit[1]*hyper_field[2] - w_unit[2]*hyper_field[1]);
-    // transformed_field[1] = std::cos(w_mag)*hyper_field[1] + std::sin(w_mag)*(w_unit[0]*hyper_field[2] + w_unit[1]*hyper_field[3] + w_unit[2]*hyper_field[0]);
-    // transformed_field[2] = std::cos(w_mag)*hyper_field[2] + std::sin(w_mag)*(-w_unit[0]*hyper_field[1] - w_unit[1]*hyper_field[0] + w_unit[2]*hyper_field[3]);
-    // transformed_field[3] = std::cos(w_mag)*hyper_field[3] + std::sin(w_mag)*(w_unit[0]*hyper_field[0] - w_unit[1]*hyper_field[1] - w_unit[2]*hyper_field[2]);
-
-    // Alternative method that directly maps to the c_representation
+    // Call function that transforms e^{iw^a\sigma^a} into c_0\sigma^0 + ic_a\sigma^a since it is easier to work with c_0 and c_a.
     std::vector<double> U_rep = this->getSU2Representation(vector_pointer, dir_index, conjugate);
-
-    //std::cout << std::setprecision(12) << U_rep[0] << " " << U_rep[1] << " " << U_rep[2] << " " << U_rep[3] << std::endl;
 
     transformed_field[0] =  U_rep[0]*hyper_field[0] - U_rep[3]*hyper_field[1] + U_rep[2]*hyper_field[2] - U_rep[1]*hyper_field[3];
     transformed_field[1] =  U_rep[3]*hyper_field[0] + U_rep[0]*hyper_field[1] + U_rep[1]*hyper_field[2] + U_rep[2]*hyper_field[3];
@@ -135,30 +108,31 @@ std::vector<double> Gradients::StandardModel::getSU2Representation(const float *
     if (conjugate)
         conj_fac = -1;
 
-    // Approach when 3 dofs are stored:
+    if (usingGeneratorRepresentation)    // Approach when 3 dofs are stored
+    {
+        double w_mag = 0.0;
+        for (unsigned comp_iter = 1; comp_iter < 4; comp_iter++) // comp_iter starts at 1 because 0 is the hypercharge, which I don't care about here.
+            w_mag += std::pow(static_cast<double>(vector_pointer[dir_index + comp_iter]), 2);
 
-    // double w_mag = 0.0;
-    // for (unsigned comp_iter = 1; comp_iter < 4; comp_iter++) // comp_iter starts at 1 because 0 is the hypercharge, which I don't care about here.
-    //     w_mag += static_cast<double>(vector_pointer[dir_index + comp_iter])*static_cast<double>(vector_pointer[dir_index + comp_iter]);
+        w_mag = std::sqrt(w_mag);
+        c_representation[0] = std::cos(w_mag);
 
-    // w_mag = std::sqrt(w_mag);
-    // c_representation[0] = std::cos(w_mag);
-
-    // if (w_mag > this->divisionByZeroTolerance)
-    // {
-    //     for (unsigned comp_iter = 1; comp_iter < 4; comp_iter++)
-    //         c_representation[comp_iter] = conj_fac*std::sin(w_mag)*static_cast<double>(vector_pointer[dir_index + comp_iter])/w_mag;
-    // }
-    // else
-    // {
-    //     c_representation[1] = std::sin(w_mag); // Arbitrarily choose this direction.
-    // }
-
-    // Approach when 4 dofs are stored:
-
-    c_representation[0] = static_cast<double>(vector_pointer[dir_index + 1]);
-    for (unsigned comp_iter = 2; comp_iter < 5; comp_iter++) // comp_iter starts at 2 because 0 is the hypercharge and 1 the c0 component.
-        c_representation[comp_iter-1] = static_cast<double>(conj_fac*vector_pointer[dir_index + comp_iter]);
+        if (w_mag > this->divisionByZeroTolerance)
+        {
+            for (unsigned comp_iter = 1; comp_iter < 4; comp_iter++)
+                c_representation[comp_iter] = conj_fac*std::sin(w_mag)*static_cast<double>(vector_pointer[dir_index + comp_iter])/w_mag;
+        }
+        else
+        {
+            c_representation[1] = std::sin(w_mag); // Arbitrarily choose this direction.
+        }
+    }
+    else                                // Approach when 4 dofs are stored
+    {
+        c_representation[0] = static_cast<double>(vector_pointer[dir_index + 1]);
+        for (unsigned comp_iter = 2; comp_iter < 5; comp_iter++) // comp_iter starts at 2 because 0 is the hypercharge and 1 the c0 component.
+            c_representation[comp_iter-1] = static_cast<double>(conj_fac*vector_pointer[dir_index + comp_iter]);
+    }
 
     return c_representation;
 }
@@ -178,9 +152,11 @@ std::vector<double> Gradients::StandardModel::getScalarField(const float *const 
 Gradients::StandardModel::StandardModel(
     const unsigned &num_scalar_components, const unsigned &num_vector_components,
     const unsigned &nx, const unsigned &ny, const unsigned &nz,
-    const double &dt, const double &dx, const double &dy, const double &dz) : 
+    const double &dt, const double &dx, const double &dy, const double &dz,
+    const bool using_generator_representation) : 
     numScalarComponents(num_scalar_components), numVectorComponents(num_vector_components),
-    dt(dt), dx(dx), dy(dy), dz(dz)
+    dt(dt), dx(dx), dy(dy), dz(dz),
+    usingGeneratorRepresentation(using_generator_representation)
 {
     this->configure(std::string(SOURCE_DIR) + "/Config/StandardModel.cfg", true);
 
@@ -228,12 +204,7 @@ float Gradients::StandardModel::calcGradientEnergy(const std::vector<std::vector
         
         for (unsigned axis_iter = 0; axis_iter < 3; axis_iter++)
         {
-            // Approach when using 3 dofs:
-            //unsigned dir_index = axis_iter*4; // To index the correct spatial component of the gauge fields
-
-            // Approach when using 4 dofs:
-            unsigned dir_index = axis_iter*5;
-
+            unsigned dir_index = axis_iter*this->numVectorComponents/3U;
             unsigned dir_scalar_index = axis_iter*this->numScalarComponents; // To store scalar fields in derivative before squaring.
 
             // Transform the fields with the gauge fields.
@@ -315,11 +286,7 @@ std::vector<double> Gradients::StandardModel::calcDerivatives(const std::vector<
 
         for (unsigned axis_iter = 0; axis_iter < 3; axis_iter++)
         {
-            // Approach when using 3 dofs:
-            //unsigned dir_index = axis_iter*4; // For indexing the correct spatial component of the vector fields
-
-            // Approach when using 4 dofs:
-            unsigned dir_index = axis_iter*5;
+            unsigned dir_index = axis_iter*this->numVectorComponents/3U;
 
             // Transform the field
             std::vector<double> transformed_field = this->getScalarField(scalar_pointers[axis_iter][stencil_iter]);
@@ -363,13 +330,8 @@ std::vector<double> Gradients::StandardModel::calcCurrents(const std::vector<std
 
     for (unsigned axis_iter = 0; axis_iter < 3; axis_iter++)
     {
-        // Approach when using 3 dofs:
-        //unsigned eq_dir_index = axis_iter*4;
-        //unsigned dir_index = axis_iter*4; // For indexing the correct spatial component of the vector fields
-
-        // Approach when using 4 dofs:
         unsigned eq_dir_index = axis_iter*4;
-        unsigned dir_index = axis_iter*5;
+        unsigned dir_index = axis_iter*this->numVectorComponents/3U;
 
         // First step is to transform phi(x) with U(x) to get tilde{phi(x)}
         std::vector<double> transformed_field = this->getScalarField(scalar_pointers[axis_iter][1]);
@@ -378,7 +340,7 @@ std::vector<double> Gradients::StandardModel::calcCurrents(const std::vector<std
         std::vector<double> neighbour_field = this->getScalarField(scalar_pointers[axis_iter][2]);
 
         // Next step is to calculate the imaginary part of tilde{phi(x)}^dagger sigma^mu phi(x+s_i).
-        // Also needs multiplying by -1/4 and the gauge coupling^2
+        // Also needs multiplying by 1/4 and the gauge coupling^2 (done outside class)
 
         // Hypercharge current
         currentContribution[eq_dir_index] = 0.25*( transformed_field[0]*neighbour_field[1] - transformed_field[1]*neighbour_field[0]
@@ -397,6 +359,5 @@ std::vector<double> Gradients::StandardModel::calcCurrents(const std::vector<std
 
     }
 
-    // Returns components of 0.25*(g or gp)^2\Phi^\dagger(x)U_i^\dagger\sigma^\mu\Phi(x+s_i)
     return currentContribution;
 }
