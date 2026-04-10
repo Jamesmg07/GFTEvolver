@@ -122,7 +122,7 @@ std::vector<double> Gradients::TwoHDM::transform(const std::vector<double> &scal
         for (int comp_iter = 0; comp_iter < 8; comp_iter++)
         {
             int pm = -1 + 2*(comp_iter%2); // Alternates between -1 and 1 (period is 2)
-            int pm4 = 1 - 2*(comp_iter%4); // Alternates between 1 and -1 (period is 4)
+            int pm4 = 1 - 2*(comp_iter/4); // Alternates between 1 and -1 (period is 4 as long as max comp_iter is 7)
             transformed_field[comp_iter] = std::cos(static_cast<double>(vector_pointer[dir_index + offset]))*SM_field[comp_iter]
                                          + pm*std::sin(pm4*conj_fac*static_cast<double>(vector_pointer[dir_index + offset]))*SM_field[comp_iter - pm];
         }
