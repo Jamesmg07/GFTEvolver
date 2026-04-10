@@ -20,14 +20,14 @@ set(PROJECT_HEADERS_DIR "${CMAKE_SOURCE_DIR}/Header")
 # -----------------------------
 # Sources
 # -----------------------------
-set(
-  SOURCES
-  "Source/main.cpp"
-  "Source/Lattice.cpp"
-  "Source/Model.cpp"
-)
+#set(
+  #SOURCES
+  #"Source/main.cpp"
+  #"Source/Lattice.cpp"
+  #"Source/Model.cpp"
+#)
 
-add_executable(GFTEvolver ${SOURCES})
+add_executable(GFTEvolver main.cpp)
 
 if (MSVC)
     target_compile_options(GFTEvolver PRIVATE
@@ -52,6 +52,7 @@ target_compile_definitions(GFTEvolver PRIVATE
 # Subdirectories (modules)
 # -----------------------------
 
+add_subdirectory(Core)
 add_subdirectory(Potentials)
 add_subdirectory(Gradients)
 add_subdirectory(WilsonLoops)
@@ -70,6 +71,7 @@ target_include_directories(GFTEvolver PRIVATE ${PROJECT_HEADERS_DIR})
 # -----------------------------
 
 target_link_libraries(GFTEvolver PRIVATE
+    Core
     Potentials
     Gradients
     WilsonLoops

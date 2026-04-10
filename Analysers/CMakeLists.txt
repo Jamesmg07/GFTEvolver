@@ -1,6 +1,6 @@
 # Include path
 set(HEADERS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Header")
-set(ROOT_HEADERS_DIR "${CMAKE_SOURCE_DIR}/Header")
+set(ROOT_HEADERS_DIR "${CMAKE_SOURCE_DIR}/Core/Header")
 
 # -----------------------------
 # Sources
