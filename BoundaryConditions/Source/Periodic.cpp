@@ -198,7 +198,6 @@ Periodic::Periodic(std::vector<float> &scalar_fields, std::vector<float> &vector
 
 Periodic::~Periodic()
 {
-    this->configure(std::string(SOURCE_DIR) + "/Config/Periodic.cfg");
 }
 
 ///////////////////////////////////////////////////  Public Functions  ///////////////////////////////////////////////////////////

@@ -7,6 +7,7 @@
 
 #include "BoundaryCondition.hpp"
 #include "Periodic.hpp"
+#include "Fixed.hpp"
 
 #include "Analyser.hpp"
 #include "OutputFields.hpp"

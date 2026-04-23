@@ -268,8 +268,11 @@ void Lattice::initBoundaryCondition(const std::vector<int> &boundary_condition_t
         
         case FIXED:
 
-            std::cout << "LATTICE::ERROR: Boundary condition (" << bound_vector[0] << " " << bound_vector[1]
-                      << " " << bound_vector[2] << ") has been chosen to be fixed, but this feature has not been added yet." << std::endl;
+            this->boundaryConditions.push_back( new Fixed(this->scalarFields, this->vectorFields, this->analysers,
+                                                          this->numScalarFieldComponents, this->numVectorFieldComponents,
+                                                          this->model, this->nx, this->ny, this->nz, this->dt,
+                                                          bound_vector)
+                                              );
             break;
 
         case NEUMANN:
@@ -281,9 +284,9 @@ void Lattice::initBoundaryCondition(const std::vector<int> &boundary_condition_t
         case PERIODIC:
 
             this->boundaryConditions.push_back( new Periodic(this->scalarFields, this->vectorFields, this->analysers,
-                                                                    this->numScalarFieldComponents, this->numVectorFieldComponents,
-                                                                    this->model, this->nx, this->ny, this->nz, this->dt,
-                                                                    bound_vector)
+                                                             this->numScalarFieldComponents, this->numVectorFieldComponents,
+                                                             this->model, this->nx, this->ny, this->nz, this->dt,
+                                                             bound_vector)
                                               );
             break;
 
