@@ -1,7 +1,8 @@
 1) Boundary conditions need some structural adjustments to how they function. In particular, the issue
 is how different boundary conditions interact at the edges. I don't want to have to write hybrid classes
 for all the different combinations of boundary conditions that can arise. It would be better to have
-a way of doing this automatically.
+a way of doing this automatically. Boundary conditions are currently given priority depending on there type
+which is sufficient for 1 grid point thick boundaries (see point below).
 
 2) Stencils larger than 3-point should be easy to include for the gradients, but I have not written the
 Wilson loops in the same generalisable manner. It would be good to include this.
@@ -11,3 +12,25 @@ Wilson loops in the same generalisable manner. It would be good to include this.
 
 4) It would be nice to have a way to normalise the potential energy of the double SO(N) class internally
 for general parameter choices. This can be done once at set-up and stored to be used during evolution.
+This is quite a difficult problem, so there is currently the option to enter the normalisation manually
+(to be added).
+
+5) Include a boolean which gives the option to cache quantities in calcPotentialDerivatives to be used
+in calcPotentialEnergy to save on computation. Warning in the config file that this can be dangerous.
+
+6) Try to move all post-evolve analysis to pre-evolve on the next timestep. The post-evolve analysis
+can be left as an option in case it is needed but the general approach should be to prefer pre-evolve
+where possible. It would also be nice to move the pre-evolve outside of the main loop so that it is 
+structured the same way as post-evolve and possibly to wrap the corresponding lattice functions in
+an if statement so that they only run if at least one analyser is assigned to avoid wasted loop set-up,
+index calculations etc. Even better if the if statement also filters cases where some analysers are assigned
+but do not perform any location analysis.
+
+7) Do we need to enforce that the gauge conditions are satisfied at the end of a damping period? Is there
+a theoretical argument to suggest that the gauge conditions should be satisfied throughout the damping
+period. Add an explanation of theory on why a conserved current should preserve the gauge condition, as long
+as it is initially satisfied.
+
+8) Add in a gradient flow option under lattice class. Eventually, core will have a new class called Solver,
+which allows the type of solver to be changed (currently leapfrog). Once this is done, gradient flow vs 
+standard evolution can be handled by the solver config.
