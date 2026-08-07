@@ -75,7 +75,14 @@ private:
      */
     void initInitialCondition(const std::vector<int> &initial_condition_types);
 
-    void initBoundaryCondition(const std::vector<int> &boundary_condition_types);
+    /*
+     * Instantiates the existing 26 boundary-region objects from the six
+     * user-assigned face boundary conditions.
+     *
+     * @param        vector<int> face_boundary_condition_types
+     *               Choices for (-x), (+x), (-y), (+y), (-z), (+z).
+     */
+    void initBoundaryCondition(const std::vector<int> &face_boundary_condition_types);
 
     /*
      * Allocate the appropriate amount of memory and run a function to generate the initial conditions
@@ -98,6 +105,17 @@ private:
      * @return        vector<vector<unsigned>>                Limits of the interiod grid loops.
      */
     std::vector< std::vector<unsigned> > determineResponsibilities(const unsigned &stencil_size) const;
+
+
+    /*
+    * Runs post-evolution location analyses after the new timestep
+    * has been completed across the full dynamic grid.
+    *
+    * @param        unsigned t_now
+    * @param        vector<vector<unsigned>> loop_limits
+    */
+    void postEvolveAnalysis(const unsigned &t_now, const std::vector<std::vector<unsigned>> &loop_limits);
+
 
     /*
      * Add on the contributions from the x position (and neighbours) to the running indices array

@@ -45,6 +45,7 @@ endif()
 # Create macro for the source directory
 target_compile_definitions(GFTEvolver PRIVATE
     SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+    DATA_DIR="${CMAKE_SOURCE_DIR}/Data"
 )
 
 

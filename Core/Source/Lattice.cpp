@@ -1,4 +1,5 @@
 #include "Lattice.hpp"
+#include <stdexcept>
 
 ////////////////////////////////////////////////////////////////////////////////////////////
 //                                   Private                                              //
@@ -35,7 +36,7 @@ void Lattice::configure(const std::string path, const bool debug)
 
     // Store choices for debug
     std::vector<int> initial_condition_types(2, 0);
-    std::vector<int> boundary_condition_types(26, 0);
+    std::vector<int> face_boundary_condition_types(6, 0);
     std::vector<bool> analysis_choices(3, false);
 
     // Read in the parameter values from the configuration file
@@ -122,25 +123,14 @@ void Lattice::configure(const std::string path, const bool debug)
                                                           1ULL*this->nx*this->ny*this->nz, this->numVectorFieldComponents) );
 
 
-        // Choose boundary condition types
-        // Face boundary choices
+        // Choose boundary condition types. Only the six faces are assigned by
+        // the user; edge and corner behaviour is inferred automatically.
         for (unsigned iter = 0; iter < 7; iter++) std::getline(ifs, description);
         std::getline(ifs, description, ':');
-        for (unsigned iter = 0; iter < 6; iter++) ifs >> boundary_condition_types[iter];
-
-
-        // Edge boundary choices
-        for (unsigned iter = 0; iter < 3; iter++) std::getline(ifs, description);
-        std::getline(ifs, description, ':');
-        for (unsigned iter = 6; iter < 18; iter++) ifs >> boundary_condition_types[iter];
-
-        // Corner boundary choices
-        for (unsigned iter = 0; iter < 3; iter++) std::getline(ifs, description);
-        std::getline(ifs, description, ':');
-        for (unsigned iter = 18; iter < 26; iter++) ifs >> boundary_condition_types[iter];
+        for (unsigned iter = 0; iter < 6; iter++) ifs >> face_boundary_condition_types[iter];
 
         // Instantiate boundary conditions
-        this->initBoundaryCondition(boundary_condition_types);
+        this->initBoundaryCondition(face_boundary_condition_types);
 
 
         // Choose whether to output progress throughout the simulation.
@@ -167,11 +157,8 @@ void Lattice::configure(const std::string path, const bool debug)
                   << ", Vector initial condition type: " << initial_condition_types[1] << "\n"
                   << "Face boundary condition types:";
 
-        for (unsigned iter = 0; iter < 6; iter ++) std::cout << " " << boundary_condition_types[iter];
-        std:: cout << "\nEdge boundary condition types:";
-        for (unsigned iter = 6; iter < 18; iter++) std::cout << " " << boundary_condition_types[iter];
-        std::cout << "\nCorner boundary condition types:";
-        for (unsigned iter = 18; iter < 26; iter++) std::cout << " " << boundary_condition_types[iter];
+        for (unsigned iter = 0; iter < 6; iter++)
+            std::cout << " " << face_boundary_condition_types[iter];
 
         std::cout << "\nOutput fields?: " << analysis_choices[0]
                   << "\nOutput energy?: " << analysis_choices[1]
@@ -227,10 +214,54 @@ void Lattice::initInitialCondition(const std::vector<int> &initial_condition_typ
     }
 }
 
-void Lattice::initBoundaryCondition(const std::vector<int> &boundary_condition_types)
+void Lattice::initBoundaryCondition(const std::vector<int> &face_boundary_condition_types)
 {
-    for (unsigned which_boundary = 0; which_boundary < boundary_condition_types.size(); which_boundary++)
+
+    // The user-facing interface contains exactly the six faces in the order
+    // (-x), (+x), (-y), (+y), (-z), (+z).
+    if (face_boundary_condition_types.size() != 6){
+        throw std::runtime_error(
+            "LATTICE:: Exactly six face boundary conditions must be assigned."
+        );
+    }
+
+    // Automatic inference currently supports the two boundary conditions that
+    // are fully implemented in V1. Neumann will be enabled separately once a
+    // gauge-covariant implementation exists.
+    for (unsigned face_iter = 0; face_iter < 6; face_iter++)
     {
+        if (face_boundary_condition_types[face_iter] != FIXED &&
+            face_boundary_condition_types[face_iter] != PERIODIC)
+        {
+            throw std::runtime_error(
+                "LATTICE:: Face boundary condition (" +
+                std::to_string(face_iter) +
+                ") has unsupported type " +
+                std::to_string(face_boundary_condition_types[face_iter]) + "."
+            );
+        }
+    }
+
+    // Periodicity is a property of a complete coordinate direction, so a
+    // periodic face must always be paired with its opposite face.
+    for (unsigned axis = 0; axis < 3; axis++)
+    {
+        const bool lower_is_periodic =
+            face_boundary_condition_types[2*axis] == PERIODIC;
+
+        const bool upper_is_periodic =
+            face_boundary_condition_types[2*axis + 1] == PERIODIC;
+
+        if (lower_is_periodic != upper_is_periodic)
+            throw std::runtime_error(
+                "LATTICE:: Periodic boundary conditions must be assigned "
+                "to both faces of an axis."
+            );
+    }
+
+    for (unsigned which_boundary = 0; which_boundary < 26; which_boundary++)
+    {
+        
         // which_boundary encodes the position and dimensionality of each boundary.
         // It is convenient to convert this into a vector that points perpendicularly outside the grid.
         std::vector<int> bound_vector(3, 0);
@@ -257,8 +288,33 @@ void Lattice::initBoundaryCondition(const std::vector<int> &boundary_condition_t
             bound_vector[2] = alternator;
         }
 
+
+        // Work out which of the six user-assigned faces meet at this region.
+        // With the current Fixed/Periodic pair, a fixed face freezes the whole
+        // region. Otherwise every incident face is periodic and the region is
+        // periodic.
+        int boundary_condition_type = PERIODIC;
+
+        for (unsigned axis = 0; axis < 3; axis++)
+        {
+            if (bound_vector[axis] == 0)
+                continue;
+
+            const unsigned face_index =
+                2*axis + (bound_vector[axis] > 0 ? 1 : 0);
+
+            if (face_boundary_condition_types[face_index] == FIXED)
+            {
+                boundary_condition_type = FIXED;
+                break;
+            }
+        }
+
+
+
+
         // Instantiate a boundary condition child class based upon the chosen type and push it back into the boundary conditions vector.
-        switch (boundary_condition_types[which_boundary])
+        switch (boundary_condition_type)
         {
         case UNASSIGNED_BOUNDARY_CONDITION:
             
@@ -293,7 +349,7 @@ void Lattice::initBoundaryCondition(const std::vector<int> &boundary_condition_t
         default:
             
             std::cout << "LATTICE::ERROR: Boundary condition (" << bound_vector[0] << " " << bound_vector[1]
-                      << " " << bound_vector[2] << ") has been given an invalid type: " << boundary_condition_types[which_boundary] << "." << std::endl;
+                      << " " << bound_vector[2] << ") has been given an invalid type: " << boundary_condition_type << "." << std::endl;
         }
 
     }
@@ -310,19 +366,33 @@ void Lattice::initFields()
     long long unsigned vector_array_size = 2ULL*this->nx*this->ny*this->nz*this->numVectorFieldComponents;
     this->vectorFields.resize(vector_array_size, 0.f);
 
-    // Temporary extra step to get quaternion form of SU(2) to be initialised correctly in SM.
-    // if (this->numVectorFieldComponents == 15U)
-    // {
-    //     for (long long unsigned loc_iter = 0; loc_iter < 2ULL*this->nx*this->ny*this->nz; loc_iter++)
-    //     {
-    //         for (unsigned dir_iter = 0; dir_iter < 3; dir_iter++)
-    //         {
-    //             this->vectorFields[(3ULL*loc_iter + 1ULL*dir_iter)*5ULL + 1ULL] = 1.f;
-    //         }
-    //     }
+    // A zero gauge field is stored as the SU(2) identity in quaternion form.
+    if (this->model.isUsingQuaternionRepresentation())
+    {
+        const unsigned direction_width
+            = this->numVectorFieldComponents/3U;
 
-    //     std::cout << "LATTICE::INITFIELDS:: Warning: Setting c0 component to 1 as a test." << std::endl;
-    // }
+        for (long long unsigned loc_iter = 0;
+            loc_iter < 2ULL*this->nx*this->ny*this->nz;
+            loc_iter++)
+        {
+            for (unsigned dir_iter = 0; dir_iter < 3U; dir_iter++)
+            {
+                const long long unsigned direction_index
+                    = loc_iter*this->numVectorFieldComponents
+                    + 1ULL*dir_iter*direction_width;
+
+                // Electroweak SU(2) identity: c0 = 1.
+                this->vectorFields[direction_index + 1ULL] = 1.f;
+
+                // The 9-component layout contains a second SU(2) factor.
+                if (direction_width == 9U)
+                {
+                    this->vectorFields[direction_index + 5ULL] = 1.f;
+                }
+            }
+        }
+    }
 
     // Generate the initial conditions
     if(scalarInitialConditions)
@@ -366,6 +436,110 @@ std::vector< std::vector<unsigned> > Lattice::determineResponsibilities(const un
 
     return loop_limits;
 }
+
+
+void Lattice::postEvolveAnalysis(
+    const unsigned &t_now,
+    const std::vector<std::vector<unsigned>> &loop_limits)
+{
+    const unsigned t_past = !t_now;
+
+    // Analyse all dynamic boundary sites.
+    for (auto bound : this->boundaryConditions)
+    {
+        bound->postEvolveAnalysis(
+            t_now,
+            this->stencilSize);
+    }
+
+    // Calculate the initial indices for the present timestep.
+    std::vector<std::vector<long long unsigned>> t_running_indices(
+        3,
+        std::vector<long long unsigned>(
+            2*this->stencilSize + 1,
+            t_now*this->nx*this->ny*this->nz
+        )
+    );
+
+    // Analyse all fully interior grid sites.
+    for (unsigned x_iter = loop_limits[0][0];
+         x_iter < loop_limits[0][1];
+         x_iter++)
+    {
+        std::vector<std::vector<long long unsigned>>
+            x_running_indices
+                = this->updateRunningIndices(
+                    t_running_indices,
+                    x_iter,
+                    0);
+
+        for (unsigned y_iter = loop_limits[1][0];
+             y_iter < loop_limits[1][1];
+             y_iter++)
+        {
+            std::vector<std::vector<long long unsigned>>
+                y_running_indices
+                    = this->updateRunningIndices(
+                        x_running_indices,
+                        y_iter,
+                        1);
+
+            for (unsigned z_iter = loop_limits[2][0];
+                 z_iter < loop_limits[2][1];
+                 z_iter++)
+            {
+                float* local_scalar_pointers[2]
+                    = {
+                        this->getScalarFieldPointer(
+                            t_past, x_iter, y_iter, z_iter),
+                        this->getScalarFieldPointer(
+                            t_now, x_iter, y_iter, z_iter)
+                    };
+
+                float* local_vector_pointers[2]
+                    = {
+                        this->getVectorFieldPointer(
+                            t_past, x_iter, y_iter, z_iter),
+                        this->getVectorFieldPointer(
+                            t_now, x_iter, y_iter, z_iter)
+                    };
+
+                std::vector<std::vector<long long unsigned>>
+                    z_running_indices
+                        = this->updateRunningIndices(
+                            y_running_indices,
+                            z_iter,
+                            2);
+
+                std::vector<std::vector<const float*>>
+                    scalar_pointers
+                        = this->generateScalarPointers(
+                            z_running_indices);
+
+                std::vector<std::vector<const float*>>
+                    vector_pointers
+                        = this->generateVectorPointers(
+                            z_running_indices);
+
+                const long long unsigned index
+                    = 1ULL*((x_iter*this->ny + y_iter)*this->nz
+                            + z_iter);
+
+                for (auto analyser : this->analysers)
+                {
+                    analyser->postEvolveLocationAnalysis(
+                        t_now,
+                        index,
+                        local_scalar_pointers,
+                        scalar_pointers,
+                        local_vector_pointers,
+                        vector_pointers);
+                }
+            }
+        }
+    }
+}
+
 
 std::vector<std::vector<long long unsigned>> Lattice::updateRunningIndices(std::vector<std::vector<long long unsigned>> running_indices,
                                                                            const unsigned &loc, const unsigned axis) const
@@ -664,32 +838,35 @@ void Lattice::evolve()
                     // Calculate the fields at the next timestep.
                     this->model.evolve(local_scalar_pointers, local_vector_pointers, this->dt,
                                        this->numScalarFieldComponents, this->numVectorFieldComponents);
-
-
-                    // Run all analyser functions that need to happen at every location in the grid, after the fields are evolved.
-                    // These analysers have access to the present and future timesteps.
-                    for (auto analyser : this->analysers)
-                        analyser->postEvolveLocationAnalysis(t_now, 1ULL*((x_iter*this->ny + y_iter)*this->nz + z_iter),
-                                                             local_scalar_pointers, scalar_pointers,
-                                                             local_vector_pointers, vector_pointers);
                     
                 }
             }
         }
 
-        // Run all continous analyser functions that don't need to happen at every location in the grid.
+        // Run post-evolution location analyses only after the new
+        // timestep is complete across the full dynamic grid.
+        this->postEvolveAnalysis(t_now, loop_limits);
+
+        // Run all continous analyser functions that don't need to happen at every location in the dynamic grid.
         for (auto analyser : this->analysers)
             analyser->timestepAnalysis(time_iter);
 
         // Replace with a function that has some more nice features.
-        if (this->progressReport && time_iter%this->reportFrequency == 0)
-            std::cout << "Timestep " << std::to_string(time_iter) << " completed.\r" << std::flush;
+        if (this->progressReport
+            && (time_iter + 1)%this->reportFrequency == 0)
+        {
+            std::cout
+                << "Timestep "
+                << std::to_string(time_iter + 1)
+                << " completed.\r"
+                << std::flush;
+        }
 
     }
 
     if (this->progressReport)
     {
-        std::cout << "Timestep " << std::to_string(this->nt - 1)  << " completed.\n";
+        std::cout << "Timestep " << std::to_string(this->nt) << " completed.\n";
 
         std::chrono::steady_clock::time_point end_time = std::chrono::steady_clock::now();
         std::chrono::duration<double> elapsed_time = end_time - start_time;

@@ -158,6 +158,21 @@ Fixed::~Fixed()
 
 void Fixed::evolve(const unsigned &t_now, const unsigned &stencil_size)
 {
+    // Intentionally performs no update. Sites assigned to a fixed
+    // boundary form a frozen support shell for neighbouring evolved
+    // stencils and lie outside the evolved physical domain.
+    //
+    // Both initial time buffers must contain identical values on this
+    // shell so that the boundary does not alternate with buffer parity.
+    //
+    // The commented-out evolution code below is historical and inactive.
+
+
+
+
+
+
+
     // const unsigned t_past = !t_now;
 
     // // Save computation by calculating the indices at lowest loop levels possible.
@@ -225,4 +240,12 @@ void Fixed::evolve(const unsigned &t_now, const unsigned &stencil_size)
     //         }
     //     }
     // }
+}
+
+
+
+
+void Fixed::postEvolveAnalysis(const unsigned &t_now, const unsigned &stencil_size){
+    // Intentionally empty. Fixed support sites are excluded from
+    // the evolved-site diagnostic domain.
 }

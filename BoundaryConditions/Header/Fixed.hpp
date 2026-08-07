@@ -103,12 +103,24 @@ public:
     ///////////////////////////////////////////////////  Public Functions  /////////////////////////////////////////////////////////
 
     /*
-     * Evolves the fields that are the responsibility of this class.
-     * This may be more than just the edges of the lattice,
-     * it depends on the size of the largest default stencil.
-     * 
-     * @param        unsigned t_now                       Specify the current timestep
-     * @param        usigned stencil_size                 Size of the largest default stencil being used.
-     */
+    * Leaves sites assigned to this fixed boundary unchanged. These
+    * allocated sites form a frozen support shell for neighbouring
+    * evolved stencils.
+    *
+    * Both initial time buffers must contain identical values on this shell.
+    *
+    * @param        unsigned t_now          Specifies the current buffer.
+    * @param        unsigned stencil_size   Size of the largest default stencil.
+    */
     void evolve(const unsigned &t_now, const unsigned &stencil_size);
+
+    /*
+    * Performs no post-evolution analysis because fixed support sites
+    * lie outside the evolved-site diagnostic domain.
+    *
+    * @param        unsigned t_now          Specifies the current buffer.
+    * @param        unsigned stencil_size   Size of the largest default stencil.
+    */
+    void postEvolveAnalysis(const unsigned &t_now, const unsigned &stencil_size);
+
 };

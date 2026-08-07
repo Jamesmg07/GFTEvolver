@@ -111,4 +111,7 @@ public:
      * @param        usigned stencil_size                 Size of the largest default stencil being used.
      */
     void evolve(const unsigned &t_now, const unsigned &stencil_size);
+
+    void postEvolveAnalysis(const unsigned &t_now, const unsigned &stencil_size);
+
 };

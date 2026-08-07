@@ -260,13 +260,97 @@ void Periodic::evolve(const unsigned &t_now, const unsigned &stencil_size)
                 this->model.evolve(local_scalar_pointers, local_vector_pointers, this->dt,
                                    this->numScalarComponents, this->numVectorComponents);
             
-                // Run all analyser functions that need to happen at every location in the grid, after the fields are evolved.
-                // These analysers have access to the present and future timesteps.
-                for (auto analyser : this->analysers)
-                    analyser->postEvolveLocationAnalysis(t_now, 1ULL*((x_iter*this->ny + y_iter)*this->nz + z_iter),
-                                                         local_scalar_pointers, scalar_pointers,
-                                                         local_vector_pointers, vector_pointers);
+                
 
+            }
+        }
+    }
+}
+
+
+
+
+void Periodic::postEvolveAnalysis(const unsigned &t_now, const unsigned &stencil_size)
+{
+    const unsigned t_past = !t_now;
+
+    // Calculate the initial indices for the present timestep.
+    std::vector<std::vector<long long unsigned>> t_running_indices(
+        3, std::vector<long long unsigned>(
+            2*stencil_size + 1,
+            t_now*this->nx*this->ny*this->nz
+        )
+    );
+
+    // Loop over all grid sites assigned to this boundary.
+    for (unsigned x_iter = this->loopLimits[0][0];
+         x_iter < this->loopLimits[0][1];
+         x_iter++)
+    {
+        std::vector<std::vector<long long unsigned>>
+            x_running_indices
+                = this->updateRunningIndices(
+                    t_running_indices, x_iter, 0);
+
+        for (unsigned y_iter = this->loopLimits[1][0];
+             y_iter < this->loopLimits[1][1];
+             y_iter++)
+        {
+            std::vector<std::vector<long long unsigned>>
+                y_running_indices
+                    = this->updateRunningIndices(
+                        x_running_indices, y_iter, 1);
+
+            for (unsigned z_iter = this->loopLimits[2][0];
+                 z_iter < this->loopLimits[2][1];
+                 z_iter++)
+            {
+                float* local_scalar_pointers[2]
+                    = {
+                        this->getScalarFieldPointer(
+                            t_past, x_iter, y_iter, z_iter),
+                        this->getScalarFieldPointer(
+                            t_now, x_iter, y_iter, z_iter)
+                    };
+
+                float* local_vector_pointers[2]
+                    = {
+                        this->getVectorFieldPointer(
+                            t_past, x_iter, y_iter, z_iter),
+                        this->getVectorFieldPointer(
+                            t_now, x_iter, y_iter, z_iter)
+                    };
+
+                std::vector<std::vector<long long unsigned>>
+                    z_running_indices
+                        = this->updateRunningIndices(
+                            y_running_indices, z_iter, 2);
+
+                std::vector<std::vector<const float*>>
+                    scalar_pointers
+                        = this->generateScalarPointers(
+                            z_running_indices);
+
+                std::vector<std::vector<const float*>>
+                    vector_pointers
+                        = this->generateVectorPointers(
+                            z_running_indices,
+                            x_iter, y_iter, z_iter);
+
+                const long long unsigned index
+                    = 1ULL*((x_iter*this->ny + y_iter)*this->nz
+                            + z_iter);
+
+                for (auto analyser : this->analysers)
+                {
+                    analyser->postEvolveLocationAnalysis(
+                        t_now,
+                        index,
+                        local_scalar_pointers,
+                        scalar_pointers,
+                        local_vector_pointers,
+                        vector_pointers);
+                }
             }
         }
     }

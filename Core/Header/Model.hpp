@@ -151,6 +151,12 @@ public:
     unsigned getDefaultStencilSize() const;
 
     /*
+    * Returns true when non-Abelian gauge links are stored directly as
+    * quaternion components rather than generator coordinates.
+    */
+    bool isUsingQuaternionRepresentation() const;
+
+    /*
      * Returns the number of constraint equations that should be satisfied throughout the evolution.
      * This is used to check that the equivalent of Gauss's law remains satisfied.
      * 

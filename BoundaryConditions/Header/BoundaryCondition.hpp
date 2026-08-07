@@ -64,4 +64,17 @@ public:
      */
     virtual void evolve(const unsigned &t_now, const unsigned &stencil_size) = 0;
 
+
+    /*
+    * Runs post-evolution location analyses after all dynamic grid sites
+    * have been evolved.
+    *
+    * @param        unsigned t_now          Specifies the current timestep.
+    * @param        unsigned stencil_size   Size of the largest default stencil.
+    */
+    virtual void postEvolveAnalysis(
+        const unsigned &t_now,
+        const unsigned &stencil_size) = 0;
+
+
 };

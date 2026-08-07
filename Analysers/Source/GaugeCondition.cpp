@@ -146,12 +146,14 @@ void GaugeCondition::postEvolveLocationAnalysis(const unsigned &t_now, const lon
                 // Pre-calculate the value since it might be used multiple times
                 float value = std::abs((*local_pointers[0])[iter]);
 
-                // First option is effectively an integration of the absolute value of each violation.
+                // First option integrates the absolute violation over the
+                // evolved-site diagnostic domain.
                 // Multiplcation by the volume factor will be done later to avoid unneccessary computation.
                 if (this->globalOptions[0])
                     this->integratedAbsViolation[iter] += value;
 
-                // Second option is about finding the largest absolute violation in the grid.
+                // Second option finds the largest absolute violation in the
+                // evolved-site diagnostic domain.
                 if (this->globalOptions[1] && value > this->maxAbsViolation[iter])
                     this->maxAbsViolation[iter] = value;
 

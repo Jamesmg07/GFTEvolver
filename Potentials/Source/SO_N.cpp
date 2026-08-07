@@ -74,8 +74,14 @@ std::vector<double> SO_N::calcPotentialDerivatives(const float *field)
     return potential_contributions;
 }
 
-// Assumed that this runs after above, so that fieldSqrMagnitude may be reused.
+// Calculate the potential energy directly from the supplied field.
 float SO_N::calcPotentialEnergy(const float *field) const
 {
-    return 0.25f*this->lambda*powf(this->fieldSqrMagnitude - this->etaSqr, 2);
+    double field_sqr_magnitude = 0.0;
+    for (unsigned iter = 0; iter < this->numComponents; iter++)
+    {
+        field_sqr_magnitude += std::pow(static_cast<double>(field[iter]), 2);
+    }
+
+    return 0.25f*this->lambda*powf(field_sqr_magnitude - this->etaSqr, 2);
 }

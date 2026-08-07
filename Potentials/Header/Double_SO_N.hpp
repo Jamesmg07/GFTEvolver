@@ -13,6 +13,11 @@ private:
 
     const unsigned &totalNumComponents;
     unsigned numComponents[2];
+
+    // Optional user-supplied additive shift of the potential-energy density.
+    bool applyPotentialNormalisation;
+    double potentialEnergyOffset;
+
     double m1, m2, m12r, m12i;
     double l1, l2, l3, l4p5, l4m5, l5i, l6r, l6i, l7r, l7i;
 
@@ -36,8 +41,8 @@ private:
      */
     void configure(const std::string path, const bool debug = false);
 
-    // Possibly add a function to determine the ground state of the potential.
-    // This may be quite computationally taxing but only needs to run once, then store potential energy of ground state to be subtracted.
+    // Potential normalisation is user supplied; this class does not
+    // determine the vacuum from the potential parameters.
 
 public:
 
@@ -50,8 +55,7 @@ public:
 
     /*
      * Calculates the potential energy density at this location in the lattice.
-     * Assumes that the square magnitude of the field has already been calculated by the
-     * calcPotentialDerivatives function.
+      * The required field invariants are calculated directly from the supplied field.
      * 
      * @param        float* field                Pointer to the scalar fields at this position.
      * 

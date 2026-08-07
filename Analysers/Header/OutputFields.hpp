@@ -10,7 +10,7 @@ private:
     ////////////////////////////////////////////////////  Variables  ////////////////////////////////////////////////////////
 
     bool outputBothTimesteps, outputInitial, outputFinal, outputContinual;
-    unsigned outputFrequency;
+    unsigned outputFrequency, completedTimesteps;
 
     std::string initialAnalysisPath, continualAnalysisPath, finalAnalysisPath;
 
@@ -26,6 +26,17 @@ private:
      * @param        bool debug                 Outputs loaded choices and parameters if true.
      */
     void configure(const std::string path, const bool debug = false);
+
+
+    /*
+    * Outputs the requested field configuration.
+    *
+    * @param        string path                Output file path.
+    * @param        unsigned time_step         Number of completed field updates.
+    */
+    void outputFields(const std::string &path,
+                    const unsigned &time_step) const;
+
 
 public:
 

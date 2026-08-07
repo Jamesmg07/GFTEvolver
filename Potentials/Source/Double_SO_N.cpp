@@ -4,6 +4,9 @@
 
 void Double_SO_N::initVariables()
 {
+    this->applyPotentialNormalisation = false;
+    this->potentialEnergyOffset = 0.0;
+
     this->m1 = 0;
     this->m2 = 0;
     this->m12r = 0;
@@ -43,6 +46,13 @@ void Double_SO_N::configure(const std::string path, const bool debug)
         // Load number of components in f1.
         std::getline(ifs, description, ':');
         ifs >> this->numComponents[0];
+
+        // Load the optional user-supplied potential-energy shift.
+        std::getline(ifs, description, ':');
+        ifs >> this->applyPotentialNormalisation;
+
+        std::getline(ifs, description, ':');
+        ifs >> this->potentialEnergyOffset;
 
         if (this->numComponents[0] > this->totalNumComponents)
             throw std::runtime_error("POTENTIAL::DOUBLE_SO_N:: The number of field components in f1 has been set to " + std::to_string(this->numComponents[0])
@@ -121,6 +131,7 @@ void Double_SO_N::configure(const std::string path, const bool debug)
     {
         std::cout << "POTENTIALS::DOUBLE_SO_N::\n"
                   << "#Components in f1: " << this->numComponents[0] << ", #Components in f2:" << this->numComponents[1] << "\n"
+                  << "Apply optional potential-energy normalisation: " << this->applyPotentialNormalisation << ", potential-energy offset added when enabled: " << this->potentialEnergyOffset << "\n"
                   << "m1: " << this->m1 << ", m2: " << this->m2 << ", l1: " << this->l1 << ", l2: " << this->l2 << ", l3: " << this->l3
                   << "\n m12r: " << this->m12r << ", l4p5: " << this->l4p5 << ", l6r: " << this->l6r << ", l7r: " << this->l7r
                   << "\n m12i: " << this->m12i << ", l4m5: " << this->l4m5 << ", l5i: " << this->l5i << ", l6i: " << this->l6i << ", l7i: " << this->l7i
@@ -222,7 +233,7 @@ std::vector<double> Double_SO_N::calcPotentialDerivatives(const float *field)
         // Single SO(N) contribution
         if (this->breakToSON)
         {
-            potential_contributions[f2index] += ( this->m12r + 2.0*this->l4p5*this->fieldsDot + this->l6r*this->fieldSqrMagnitude[0]
+            potential_contributions[f2index] += ( -this->m12r + 2.0*this->l4p5*this->fieldsDot + this->l6r*this->fieldSqrMagnitude[0]
                                                 + this->l7r*this->fieldSqrMagnitude[1] )*static_cast<double>(field[comp_iter])
                                                 + 2.0*this->l7r*this->fieldsDot*static_cast<double>(field[f2index]);
 
@@ -259,25 +270,98 @@ std::vector<double> Double_SO_N::calcPotentialDerivatives(const float *field)
 
 // V_U = +m12i*f1^T*J*f2 + l4m5*(f1^T*Jf2)^2 - 2*l5i*(f1^T*f2)*(f1^T*J*f2) - l6i*|f1|^2*(f1^T*J*f2) - l7i*|f2|^2*(f1^T*J*f2).
 
-// Assumed that this runs after above, so that field magnitudes, dot and antisymmetric products can all be reused.
+// Calculate the potential energy directly from the supplied field.
 float Double_SO_N::calcPotentialEnergy(const float *field) const
 {
-    // Full symmetry contribution
-    float potential = -this->m1*this->fieldSqrMagnitude[0] - this->m2*this->fieldSqrMagnitude[1] 
-                    + this->l1*std::pow(this->fieldSqrMagnitude[0], 2) + this->l2*std::pow(this->fieldSqrMagnitude[1], 2)
-                    + this->l3*this->fieldSqrMagnitude[0]*this->fieldSqrMagnitude[1];
+    // Calculate the squared magnitude of each field.
+    double field_sqr_magnitude[2] = {0.0, 0.0};
 
-    // Single SO(N) contribution
+    for (unsigned field_iter = 0; field_iter < 2; field_iter++)
+    {
+        for (unsigned comp_iter = 0;
+             comp_iter < this->numComponents[field_iter];
+             comp_iter++)
+        {
+            field_sqr_magnitude[field_iter]
+                += std::pow(
+                    static_cast<double>(
+                        field[field_iter*this->numComponents[0] + comp_iter]),
+                    2);
+        }
+    }
+
+    double fields_dot = 0.0;
+    double fields_antisym = 0.0;
+
+    // These quantities are only needed when the potential breaks
+    // SO(N) x SO(N) to a single SO(N).
     if (this->breakToSON)
     {
-        potential += -this->m12r*this->fieldsDot + this->l4p5*std::pow(this->fieldsDot, 2)
-                   + this->l6r*this->fieldSqrMagnitude[0]*this->fieldsDot + this->l7r*this->fieldSqrMagnitude[1]*this->fieldsDot;
+        for (unsigned comp_iter = 0;
+             comp_iter < this->numComponents[0];
+             comp_iter++)
+        {
+            fields_dot
+                += static_cast<double>(field[comp_iter])
+                 * static_cast<double>(
+                       field[this->numComponents[0] + comp_iter]);
+        }
 
+        // This quantity is only needed when the symmetry is further
+        // broken to U(N/2).
         if (this->breakToUHalfN)
         {
-            potential += this->m12i*this->fieldsAntisym + this->l4m5*std::pow(this->fieldsAntisym, 2) - 2.0*this->l5i*this->fieldsDot*this->fieldsAntisym
-                       - this->l6i*this->fieldSqrMagnitude[0]*this->fieldsAntisym - this->l7i*this->fieldSqrMagnitude[1]*this->fieldsAntisym;
+            for (unsigned comp_iter = 0;
+                 comp_iter < this->numComponents[0]/2;
+                 comp_iter++)
+            {
+                fields_antisym
+                    += static_cast<double>(field[2*comp_iter])
+                     * static_cast<double>(
+                           field[this->numComponents[0]
+                               + 2*comp_iter + 1])
+                     - static_cast<double>(field[2*comp_iter + 1])
+                     * static_cast<double>(
+                           field[this->numComponents[0]
+                               + 2*comp_iter]);
+            }
         }
+    }
+
+    // Full SO(N) x SO(M) contribution.
+    float potential
+        = -this->m1*field_sqr_magnitude[0]
+          -this->m2*field_sqr_magnitude[1]
+          +this->l1*std::pow(field_sqr_magnitude[0], 2)
+          +this->l2*std::pow(field_sqr_magnitude[1], 2)
+          +this->l3*field_sqr_magnitude[0]*field_sqr_magnitude[1];
+
+    // Single SO(N) contribution.
+    if (this->breakToSON)
+    {
+        potential
+            += -this->m12r*fields_dot
+               +this->l4p5*std::pow(fields_dot, 2)
+               +this->l6r*field_sqr_magnitude[0]*fields_dot
+               +this->l7r*field_sqr_magnitude[1]*fields_dot;
+
+        // U(N/2) contribution.
+        if (this->breakToUHalfN)
+        {
+            potential
+                += this->m12i*fields_antisym
+                   +this->l4m5*std::pow(fields_antisym, 2)
+                   -2.0*this->l5i*fields_dot*fields_antisym
+                   -this->l6i*field_sqr_magnitude[0]*fields_antisym
+                   -this->l7i*field_sqr_magnitude[1]*fields_antisym;
+        }
+    }
+
+    // A constant shift changes the energy zero but not the equations of motion.
+    if (this->applyPotentialNormalisation)
+    {
+        potential += static_cast<float>(
+            this->potentialEnergyOffset);
     }
 
     return potential;

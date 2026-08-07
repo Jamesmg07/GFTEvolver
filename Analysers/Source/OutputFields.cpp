@@ -59,6 +59,83 @@ void OutputFields::configure(const std::string path, const bool debug)
     }
 }
 
+
+void OutputFields::outputFields(const std::string &path,
+                                const unsigned &time_step) const
+{
+    std::ofstream ofs(std::string(DATA_DIR) + "/" + path);
+
+    if (ofs.is_open())
+    {
+        long long unsigned loop_max;
+        long long unsigned start_scalar_index;
+        long long unsigned start_vector_index;
+
+        if (this->outputBothTimesteps)
+        {
+            loop_max
+                = this->scalarFields.size()/this->numScalarComponents;
+
+            start_scalar_index = 0;
+            start_vector_index = 0;
+        }
+        else
+        {
+            const unsigned current_time_index
+                = (time_step + 1)%2;
+
+            loop_max
+                = this->scalarFields.size()
+                  /(2ULL*this->numScalarComponents);
+
+            start_scalar_index
+                = current_time_index
+                  *loop_max
+                  *this->numScalarComponents;
+
+            start_vector_index
+                = current_time_index
+                  *loop_max
+                  *this->numVectorComponents;
+        }
+
+        for (long long unsigned iter = 0;
+             iter < loop_max;
+             iter++)
+        {
+            // Output the scalar fields at this location.
+            for (unsigned compIter = 0;
+                 compIter < this->numScalarComponents;
+                 compIter++)
+            {
+                ofs << this->scalarFields[
+                    start_scalar_index
+                    + iter*this->numScalarComponents
+                    + compIter] << " ";
+            }
+
+            // Output the vector fields at this location.
+            for (unsigned compIter = 0;
+                 compIter < this->numVectorComponents;
+                 compIter++)
+            {
+                ofs << this->vectorFields[
+                    start_vector_index
+                    + iter*this->numVectorComponents
+                    + compIter] << " ";
+            }
+
+            ofs << std::endl;
+        }
+    }
+
+    ofs.close();
+}
+
+
+
+
+
 ///////////////////////////////////////////////  Constructors/Destructors  //////////////////////////////////////////////////////
 
 OutputFields::OutputFields(const std::vector<float> &scalar_fields, const unsigned &num_scalar_components,
@@ -67,6 +144,7 @@ OutputFields::OutputFields(const std::vector<float> &scalar_fields, const unsign
       scalarFields(scalar_fields), numScalarComponents(num_scalar_components),
       vectorFields(vector_fields), numVectorComponents(num_vector_components)
 {
+    this->completedTimesteps = 0;
     this->configure(std::string(SOURCE_DIR) + "/Config/OutputFields.cfg", true);
 }
 
@@ -78,40 +156,10 @@ OutputFields::~OutputFields()
 
 void OutputFields::initialAnalysis()
 {
-    std::ofstream ofs(std::string(DATA_DIR) + "/" + this->initialAnalysisPath);
-
-    if (ofs.is_open())
+    if (this->outputInitial)
     {
-        long long unsigned numPositions = this->scalarFields.size()/(2ULL*this->numScalarComponents);
-
-        long long unsigned loop_max, start_scalar_index, start_vector_index;
-        if (this->outputBothTimesteps)
-        {
-            loop_max = this->scalarFields.size()/this->numScalarComponents;
-            start_scalar_index = 0;
-            start_vector_index = 0;
-        }
-        else{
-            loop_max = this->scalarFields.size()/(2ULL*this->numScalarComponents);
-            start_scalar_index = loop_max*this->numScalarComponents;
-            start_vector_index = loop_max*this->numVectorComponents;
-        }
-        for (long long unsigned iter = 0; iter < loop_max; iter++)
-        {
-            // Output the scalar fields at this location
-            for(unsigned compIter = 0; compIter < this->numScalarComponents; compIter++)
-                ofs << this->scalarFields[start_scalar_index + iter*this->numScalarComponents + compIter] << " ";
-
-            // Output the vector fields at this location
-            for(unsigned compIter = 0; compIter < this->numVectorComponents; compIter++)
-                ofs << this->vectorFields[start_vector_index + iter*this->numVectorComponents + compIter] << " ";
-
-            ofs << std::endl;
-        }
+        this->outputFields(this->initialAnalysisPath, 0);
     }
-
-    ofs.close();
-    
 }
 
 void OutputFields::preEvolveLocationAnalysis(const long long unsigned index,
@@ -128,48 +176,28 @@ void OutputFields::postEvolveLocationAnalysis(const unsigned &t_now, const long 
 
 void OutputFields::timestepAnalysis(const unsigned &time_step)
 {
-    if (time_step%this->outputFrequency == 0)
+    this->completedTimesteps = time_step + 1;
+
+    if (this->outputContinual
+        && this->completedTimesteps%this->outputFrequency == 0)
     {
-        unsigned t_now = (time_step+1)%2;
-        unsigned t_past = !t_now;
-
-        std::ofstream ofs(std::string(DATA_DIR) + "/" + this->continualAnalysisPath + "_" + std::to_string(time_step) + ".dat");
-
-        if (ofs.is_open())
-        {
-            long long unsigned numPositions = this->scalarFields.size()/(2ULL*this->numScalarComponents);
-
-            long long unsigned loop_max, start_scalar_index, start_vector_index;
-            if (this->outputBothTimesteps)
-            {
-                loop_max = this->scalarFields.size()/this->numScalarComponents;
-                start_scalar_index = 0;
-                start_vector_index = 0;
-            }
-            else{
-                loop_max = this->scalarFields.size()/(2ULL*this->numScalarComponents);
-                start_scalar_index = t_past*loop_max*this->numScalarComponents;
-                start_vector_index = t_past*loop_max*this->numVectorComponents;
-            }
-            for (long long unsigned iter = 0; iter < loop_max; iter++)
-            {
-                // Output the scalar fields at this location
-                for(unsigned compIter = 0; compIter < this->numScalarComponents; compIter++)
-                    ofs << this->scalarFields[start_scalar_index + iter*this->numScalarComponents + compIter] << " ";
-
-                // Output the vector fields at this location
-                for(unsigned compIter = 0; compIter < this->numVectorComponents; compIter++)
-                    ofs << this->vectorFields[start_vector_index + iter*this->numVectorComponents + compIter] << " ";
-
-                ofs << std::endl;
-            }
-        }
-
-        ofs.close();
+        this->outputFields(
+            this->continualAnalysisPath
+                + "_"
+                + std::to_string(this->completedTimesteps)
+                + ".dat",
+            this->completedTimesteps);
     }
 }
 
 void OutputFields::finalAnalysis()
 {
+    if (this->outputFinal)
+    {
+        this->outputFields(
+            this->finalAnalysisPath,
+            this->completedTimesteps);
+    }
 }
 
+ 

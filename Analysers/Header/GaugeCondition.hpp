@@ -82,7 +82,9 @@ public:
                                    const float* const local_vector_pointers[2], const std::vector<std::vector<const float*>> &vector_pointers);
 
     /*
-     * Calculates the extent to which the gauge condition(s) is(are) violated at each location in the grid.
+     * Calculates the gauge-constraint violation at each visited site
+     * in the evolved-site diagnostic domain. Fixed support sites are
+     * excluded; their full-grid local-array entries are placeholders.
      * 
      * @param        unsigned t_now                                        Index to determine locations in array that correspond to "now" (other is future)
      * @param        long long unsigned index                              Index for the density arrays
@@ -97,11 +99,11 @@ public:
                                     const float* const local_vector_pointers[2], const std::vector<std::vector<const float*>> &vector_pointers);
 
     /*
-     * Outputs the data at each timestep.
-     * Performs any additional processes that need to happen once per timestep, such as resetting variables to zero.
-     *
-     * @param        unsigned time_step                                    The current timestep.
-     */
+    * Outputs integrated and maximum absolute violations over the
+    * evolved-site diagnostic domain and resets the accumulators.
+    *
+    * @param        unsigned time_step       The current timestep.
+    */
     void timestepAnalysis(const unsigned &time_step);
 
     /*

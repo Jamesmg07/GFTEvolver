@@ -296,7 +296,7 @@ float Gradients::TwoHDM::calcGradientEnergy(const std::vector<std::vector<const 
             }
 
             // Now can sum over the stencil
-            for (unsigned comp_iter = 0; comp_iter < 4; comp_iter++)
+            for (unsigned comp_iter = 0; comp_iter < 8; comp_iter++)
             {
                 derivatives[dir_scalar_index + comp_iter] += this->energy_stencils[0][axis_iter][stencil_iter]*transformed_field[comp_iter];
             }

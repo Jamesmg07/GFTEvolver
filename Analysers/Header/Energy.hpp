@@ -64,7 +64,9 @@ public:
     void initialAnalysis();
 
     /*
-     * Calculates the energy density at each location.
+     * Calculates energy densities at each visited site in the
+     * evolved-site diagnostic domain. Fixed support sites are not
+     * visited; their full-grid local-array entries are placeholders.
      * 
      * @param        long long unsigned index                              Index for the density arrays
      * @param        float* local_scalar_pointers[2]                       Pointers to the scalar field at current location for both timesteps.
@@ -93,7 +95,8 @@ public:
                                     const float* const local_vector_pointers[2], const std::vector<std::vector<const float*>> &vector_pointers);
 
     /*
-     * Output the total energy to file and reset the total energy.
+     * Outputs energy integrated over the evolved-site diagnostic
+     * domain and resets the energy accumulators.
      *
      * @param        unsigned time_step                                    The current timestep.
      */

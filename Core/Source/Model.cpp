@@ -260,6 +260,12 @@ unsigned Model::getDefaultStencilSize() const
     return stencil_size;
 }
 
+bool Model::isUsingQuaternionRepresentation() const
+{
+    return this->numVectorEqs > 0
+        && !this->wilsonLoop->isUsingGeneratorRepresentation();
+}
+
 unsigned Model::getNumberOfConstraintEquations() const
 {
     unsigned gradient_num_constraints = this->gradient->getNumberOfConstraintEquations();
@@ -333,11 +339,16 @@ std::vector<float> Model::calcConstraintViolation(const unsigned &num_equations,
 void Model::evolve(float *const local_scalar_fields[2], float *const local_vector_fields[2],
                    const double &dt, const unsigned &num_scalar_components, const unsigned &num_vector_components)
 {
+
+    // Use one explicit damping step for scalar time differences
+    // and gauge electric contributions.
+    const double damping_step = 0.5*static_cast<double>(this->currentDamping)*dt;
+
     // Evolve the scalar fields
     for (unsigned comp_iter = 0; comp_iter < num_scalar_components; comp_iter++)
     {
         double equation_right_hand_size = dt*dt*(this->derivativeContributions[comp_iter] - this->potentialContributions[comp_iter])
-                                       - 0.5*this->currentDamping*dt*(static_cast<double>(local_scalar_fields[1][comp_iter]) - static_cast<double>(local_scalar_fields[0][comp_iter]));
+                                       - damping_step*(static_cast<double>(local_scalar_fields[1][comp_iter]) - static_cast<double>(local_scalar_fields[0][comp_iter]));
 
         local_scalar_fields[0][comp_iter] =  static_cast<float>(
             2*static_cast<double>(local_scalar_fields[1][comp_iter]) - static_cast<double>(local_scalar_fields[0][comp_iter]) + equation_right_hand_size
@@ -351,7 +362,7 @@ void Model::evolve(float *const local_scalar_fields[2], float *const local_vecto
         std::vector<double> vector_equation_RHS(this->numVectorEqs, 0.0);
         for (unsigned comp_iter = 0; comp_iter < this->numVectorEqs; comp_iter++)
         {
-            vector_equation_RHS[comp_iter] = (1.0 - this->currentDamping*dt)*this->wilsonLoopElectricContributions[comp_iter]
+            vector_equation_RHS[comp_iter] = (1.0 - damping_step)*this->wilsonLoopElectricContributions[comp_iter]
                                         + dt*dt*(this->wilsonLoopMagneticContributions[comp_iter] 
                                         + this->wilsonLoop->getSqrCouplings(comp_iter)*this->currentContributions[comp_iter]);
 
