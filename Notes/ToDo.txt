@@ -14,3 +14,19 @@ Wilson loops in the same generalisable manner. It would be good to include this.
 for general parameter choices. This can be done once at set-up and stored to be used during evolution.
 This is quite a difficult problem, so there is currently the option to enter the normalisation manually
 (to be added).
+
+5) Include a boolean which gives the option to cache quantities in calcPotentialDerivatives to be used
+in calcPotentialEnergy to save on computation.
+
+6) Try to move all post-evolve analysis to pre-evolve on the next timestep. The post-evolve analysis
+can be left as an option in case it is needed but the general approach should be to prefer pre-evolve
+where possible.
+
+7) Do we need to enforce that the gauge conditions are satisfied at the end of a damping period? Is there
+a theoretical argument to suggest that the gauge conditions should be satisfied throughout the damping
+period. Add an explanation of theory on why a conserved current should preserve the gauge condition, as long
+as it is initially satisfied.
+
+8) Add in a gradient flow option under lattice class. Eventually, core will have a new class called Solver,
+which allows the type of solver to be changed (currently leapfrog). Once this is done, gradient flow vs 
+standard evolution can be handled by the solver config.
