@@ -16,11 +16,15 @@ This is quite a difficult problem, so there is currently the option to enter the
 (to be added).
 
 5) Include a boolean which gives the option to cache quantities in calcPotentialDerivatives to be used
-in calcPotentialEnergy to save on computation.
+in calcPotentialEnergy to save on computation. Warning in the config file that this can be dangerous.
 
 6) Try to move all post-evolve analysis to pre-evolve on the next timestep. The post-evolve analysis
 can be left as an option in case it is needed but the general approach should be to prefer pre-evolve
-where possible.
+where possible. It would also be nice to move the pre-evolve outside of the main loop so that it is 
+structured the same way as post-evolve and possibly to wrap the corresponding lattice functions in
+an if statement so that they only run if at least one analyser is assigned to avoid wasted loop set-up,
+index calculations etc. Even better if the if statement also filters cases where some analysers are assigned
+but do not perform any location analysis.
 
 7) Do we need to enforce that the gauge conditions are satisfied at the end of a damping period? Is there
 a theoretical argument to suggest that the gauge conditions should be satisfied throughout the damping
