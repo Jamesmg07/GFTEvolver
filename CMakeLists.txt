@@ -49,7 +49,7 @@ else()
     target_compile_options(GFTEvolver PRIVATE
         $<$<CONFIG:Debug>: -Wall -Wextra -Wpedantic -Wno-ignored-qualifiers -Wfloat-conversion -Wsign-compare -Wconversion -O0 -g>
         $<$<CONFIG:Release>: -O3>
-        $<$<CONFIG:RelWithDebInfo>: -Wall -Wextra -Wpedanctic -Wno-ignored-qualifiers -Wsign-compare -Wconversion -O3>
+        $<$<CONFIG:RelWithDebInfo>: -Wall -Wextra -Wpedantic -Wno-ignored-qualifiers -Wsign-compare -Wconversion -O3>
     )
 endif()
 

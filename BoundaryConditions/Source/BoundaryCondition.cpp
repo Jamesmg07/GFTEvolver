@@ -6,10 +6,17 @@ BoundaryCondition::BoundaryCondition(std::vector<float> &scalar_fields, std::vec
                                      const unsigned &num_scalar_components, const unsigned &num_vector_components,
                                      Model &model, const unsigned &nx, const unsigned &ny, const unsigned &nz, const double &dt,
                                      const std::vector<int> bound_vector)
-    : scalarFields(scalar_fields), vectorFields(vector_fields), analysers(analysers), 
-      numScalarComponents(num_scalar_components), numVectorComponents(num_vector_components), 
-      model(model), nx(nx), ny(ny), nz(nz), dt(dt), 
-      boundVector(bound_vector)
+    : scalarFields(scalar_fields),
+    vectorFields(vector_fields),
+    analysers(analysers),
+    boundVector(bound_vector),
+    model(model),
+    numScalarComponents(num_scalar_components),
+    numVectorComponents(num_vector_components),
+    nx(nx),
+    ny(ny),
+    nz(nz),
+    dt(dt)
 {
     this->loopLimits.resize(3, std::vector<unsigned>(2, 0) );
 }

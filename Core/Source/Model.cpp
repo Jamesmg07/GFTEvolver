@@ -1,4 +1,6 @@
 #include "Model.hpp"
+#include <cmath>
+#include <limits>
 
 ////////////////////////////////////  Initialisers  ////////////////////////////////////////////////
 
@@ -7,6 +9,11 @@ void Model::initVariables()
     this->potential = nullptr;
     this->gradient = nullptr;
     this->wilsonLoop = nullptr;
+    this->gradientFlowActive = false;
+    this->dynamicalTimeStep = 0.0;
+    this->activeEvolutionStep = 0.0;
+    this->maxScalarEquationResidualSquared = 0.0;
+    this->maxGaugeEquationResidualSquared = 0.0;
     this->dampingFactor = 0.f;
     this->ntDamped = 0;
     this->currentDamping = 0.f;
@@ -157,6 +164,8 @@ void Model::configure(
     this->wilsonLoopMagneticContributions.resize(num_vector_components, 0.f);
     this->wilsonLoopElectricContributions.resize(num_vector_components, 0.f);
 
+    this->dynamicalTimeStep = dt;
+    this->activeEvolutionStep = dt;
 
     std::ifstream ifs(path);
 
@@ -238,8 +247,56 @@ void Model::energyPreparation(const bool store_energy) const
     this->wilsonLoop->energyPreparation(store_energy);
 }
 
+void Model::setEvolutionMode(
+    const bool use_gradient_flow,
+    const double &evolution_step)
+{
+    if (!(evolution_step > 0.0))
+    {
+        throw std::runtime_error(
+            "MODEL:: The active evolution step must be positive."
+        );
+    }
+
+    this->gradientFlowActive = use_gradient_flow;
+    this->activeEvolutionStep = evolution_step;
+}
+
+bool Model::isGradientFlowActive() const
+{
+    return this->gradientFlowActive;
+}
+
+void Model::resetGradientFlowResiduals()
+{
+    this->maxScalarEquationResidualSquared = 0.0;
+    this->maxGaugeEquationResidualSquared = 0.0;
+}
+
+double Model::getMaxScalarEquationResidual() const
+{
+    return std::sqrt(
+        this->maxScalarEquationResidualSquared
+    );
+}
+
+double Model::getMaxGaugeEquationResidual() const
+{
+    return std::sqrt(
+        this->maxGaugeEquationResidualSquared
+    );
+}
+
 void Model::update(unsigned time_iter)
 {
+    if (this->gradientFlowActive)
+    {
+        this->currentDamping = 0.f;
+        this->evolveGauge = true;
+        return;
+    }
+
+    // Existing dynamical update logic remains below.
     if (time_iter < this->ntDamped)
     {
         this->currentDamping = this->dampingFactor;
@@ -303,9 +360,26 @@ float Model::calcGradientEnergy(const std::vector<std::vector<const float *>> &s
     return this->gradient->calcGradientEnergy(scalar_pointers, vector_pointers);
 }
 
-float Model::calcKineticEnergy(const float* const local_scalar_fields[2]) const
+float Model::calcKineticEnergy(
+    const float* const local_scalar_fields[2]) const
 {
-    return this->gradient->calcKineticEnergy(local_scalar_fields);
+    float kinetic_energy
+        = this->gradient->calcKineticEnergy(
+            local_scalar_fields);
+
+    if (this->gradientFlowActive)
+    {
+        const double rescaling
+            = this->dynamicalTimeStep
+            / this->activeEvolutionStep;
+
+        kinetic_energy = static_cast<float>(
+            static_cast<double>(kinetic_energy)
+            *rescaling*rescaling
+        );
+    }
+
+    return kinetic_energy;
 }
 
 void Model::calcYangMillsContributions(const std::vector<std::vector<const float *>> &vector_pointers, const float *const local_vector_fields[2])
@@ -319,9 +393,26 @@ float Model::calcMagneticEnergy(const std::vector<std::vector<const float *>> &v
     return this->wilsonLoop->calcMagneticEnergy(vector_pointers);
 }
 
-float Model::calcElectricEnergy(const float *const local_vector_fields[2]) const
+float Model::calcElectricEnergy(
+    const float *const local_vector_fields[2]) const
 {
-    return this->wilsonLoop->calcElectricEnergy(local_vector_fields);
+    float electric_energy
+        = this->wilsonLoop->calcElectricEnergy(
+            local_vector_fields);
+
+    if (this->gradientFlowActive)
+    {
+        const double rescaling
+            = this->dynamicalTimeStep
+            / this->activeEvolutionStep;
+
+        electric_energy = static_cast<float>(
+            static_cast<double>(electric_energy)
+            *rescaling*rescaling
+        );
+    }
+
+    return electric_energy;
 }
 
 std::vector<float> Model::calcConstraintViolation(const unsigned &num_equations, const long long int &t_future_index, 
@@ -343,6 +434,85 @@ std::vector<float> Model::calcConstraintViolation(const unsigned &num_equations,
 void Model::evolve(float *const local_scalar_fields[2], float *const local_vector_fields[2],
                    const double &dt, const unsigned &num_scalar_components, const unsigned &num_vector_components)
 {
+
+    if (this->gradientFlowActive)
+    {
+        double scalar_residual_squared = 0.0;
+        // First-order scalar gradient flow.
+        for (unsigned comp_iter = 0;
+            comp_iter < num_scalar_components;
+            comp_iter++)
+        {
+            const double scalar_force
+                = this->derivativeContributions[comp_iter]
+                - this->potentialContributions[comp_iter];
+
+            scalar_residual_squared += scalar_force*scalar_force;
+
+            local_scalar_fields[0][comp_iter]
+                = static_cast<float>(
+                    static_cast<double>(
+                        local_scalar_fields[1][comp_iter])
+                    + dt*scalar_force
+                );
+        }
+        if (!std::isfinite(scalar_residual_squared))
+        {
+            scalar_residual_squared
+                = std::numeric_limits<double>::infinity();
+        }
+
+        if (scalar_residual_squared > this->maxScalarEquationResidualSquared)
+        {
+            this->maxScalarEquationResidualSquared
+                = scalar_residual_squared;
+        }
+
+        // First-order gauge gradient flow.
+        if (this->evolveGauge)
+        {
+            double gauge_residual_squared = 0.0;
+
+            std::vector<double> vector_equation_RHS(
+                this->numVectorEqs,
+                0.0
+            );
+
+            for (unsigned comp_iter = 0;
+                comp_iter < this->numVectorEqs;
+                comp_iter++)
+            {
+                const double gauge_force
+                    = this->wilsonLoopMagneticContributions[comp_iter]
+                    + this->wilsonLoop->getSqrCouplings(comp_iter)
+                        *this->currentContributions[comp_iter];
+
+                gauge_residual_squared += gauge_force*gauge_force;
+
+                vector_equation_RHS[comp_iter]
+                    = dt*gauge_force;
+            }
+
+            if (!std::isfinite(gauge_residual_squared))
+            {
+                gauge_residual_squared
+                    = std::numeric_limits<double>::infinity();
+            }
+
+            if (gauge_residual_squared > this->maxGaugeEquationResidualSquared)
+            {
+                this->maxGaugeEquationResidualSquared
+                    = gauge_residual_squared;
+            }
+
+            this->wilsonLoop->evolve(
+                local_vector_fields,
+                vector_equation_RHS
+            );
+        }
+
+        return;
+    }
 
     // Use one explicit damping step for scalar time differences
     // and gauge electric contributions.

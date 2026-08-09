@@ -73,7 +73,7 @@ void Energy::configure(const std::string path, const bool debug)
                   << "Local quantities data path: Data/" << this->localQuantitiesPath << "\n"
                   << "Local options:: Energy: " << this->localOptions[0] << ", Potential: " << this->localOptions[1]
                   << ", Gradient: " << this->localOptions[2] << ", Kinetic: " << this->localOptions[3] 
-                  << ", Magnetic: << " << this->localOptions[4] << ", Electric: " << this->localOptions[5] << ", every " << this->localFrequency << " timesteps\n"
+                  << ", Magnetic: " << this->localOptions[4] << ", Electric: " << this->localOptions[5] << ", every " << this->localFrequency << " timesteps\n"
                   << std::endl;
     }
 }

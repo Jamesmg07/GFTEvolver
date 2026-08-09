@@ -29,6 +29,21 @@ private:
     unsigned nx, ny, nz, nt; // Global physical lattice size
     double dx, dy, dz, dt; // Lattice spacings
 
+    // Optional initial gradient-flow phase
+    bool performInitialGradientFlow;
+    double gradientFlowStepSize;
+    unsigned gradientFlowTimesteps;
+    bool stopGradientFlowOnResiduals;
+    double scalarEquationResidualTolerance;
+    double gaugeEquationResidualTolerance;
+
+    // Optional physical evolution phase
+    bool performDynamicalEvolution;
+
+    // The step currently seen by central and boundary updates.
+    // This is either gradientFlowStepSize or dt.
+    double activeEvolutionStep;
+
     int rank, numRanks; // MPI process index and total number of processes. Serial defaults are 0 and 1.
 
     // X-slab geometry. nx remains the global physical x-size.
@@ -119,6 +134,8 @@ private:
      * Allocate the appropriate amount of memory and run a function to generate the initial conditions
      */
     void initFields();
+
+    void synchroniseTimeBuffers(const unsigned source_time_index);
 
     ////////////////////////////////  Private Functions  /////////////////////////////////////
 

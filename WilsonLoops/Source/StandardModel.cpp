@@ -125,20 +125,21 @@ std::vector<float> WilsonLoops::StandardModel::invertSU2Representation(const std
     c_mag = std::sqrt(c_mag);
 
     double phase;
-    if (c_mag > 1)
+    if (c_mag > 1){
         //std::cout << "Panic in invert (c_mag = " << c_mag << " )" << " " << c_representation[1] << " " << c_representation[2] << " " << c_representation[3] << std::endl;
 
         // Should just be ever so slightly > 1 from rounding errors
 
         phase = M_PI_2;
-
-    else
+    }
+    else{
 
         phase = std::asin(c_mag);    // Will return result in range 0 to pi/2 -> sin(phase)>=0 but need to check what sign I want cos(phase) to have.
-
-        if (c_representation[0] < 0)
-            phase = M_PI - phase;
-
+    }
+    
+    if (c_representation[0] < 0){
+        phase = M_PI - phase;
+    }
     // double phase = std::asin(c_mag);
     // if (c_representation[0] < 0)
     //     phase = M_PI - phase;

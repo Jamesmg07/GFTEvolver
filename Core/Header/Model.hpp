@@ -34,6 +34,17 @@ private:
     Gradient* gradient;
     WilsonLoop* wilsonLoop;
 
+    //Evolution Parameters
+    bool gradientFlowActive;
+
+    // Used to normalise the finite-difference energy diagnostics.
+    double dynamicalTimeStep;
+    double activeEvolutionStep;
+    // Largest site-wise static-EOM residual norms accumulated during
+    // the current gradient-flow step on this MPI rank.
+    double maxScalarEquationResidualSquared;
+    double maxGaugeEquationResidualSquared;
+
     // Damping parameters
     unsigned ntDamped;
     float dampingFactor;
@@ -133,6 +144,16 @@ public:
      * @param        bool store_energy                Boolean that determines whether energy calculations should be performed during the evolution loop.
      */
     void energyPreparation(const bool store_energy) const;
+
+    void setEvolutionMode(const bool use_gradient_flow, const double &evolution_step);
+
+    bool isGradientFlowActive() const;
+
+    void resetGradientFlowResiduals();
+
+    double getMaxScalarEquationResidual() const;
+
+    double getMaxGaugeEquationResidual() const;
 
     /*
      * Updates internal parameters relating to the evolution that affect how evolution works, e.g damping.

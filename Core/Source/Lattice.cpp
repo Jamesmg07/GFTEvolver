@@ -2,6 +2,8 @@
 #include <array>
 #include <limits>
 #include <stdexcept>
+#include <cmath>
+#include <algorithm>
 
 #ifdef GFT_ENABLE_MPI
 #include <mpi.h>
@@ -32,6 +34,15 @@ void Lattice::initVariables()
     this->dy = 0;
     this->dz = 0;
     this->dt = 0;
+
+    this->performInitialGradientFlow = false;
+    this->gradientFlowStepSize = 0.0;
+    this->gradientFlowTimesteps = 0U;
+    this->stopGradientFlowOnResiduals = false;
+    this->scalarEquationResidualTolerance = 0.0;
+    this->gaugeEquationResidualTolerance = 0.0;
+    this->performDynamicalEvolution = true;
+    this->activeEvolutionStep = 0.0;
 
     this->numScalarFieldComponents = 0;
     this->numVectorFieldComponents = 0;
@@ -83,6 +94,62 @@ void Lattice::configure(const std::string path, const bool debug)
         std::getline(ifs, description, ':');
         ifs >> this->dt;
 
+        // Optional gradient-flow phase
+        std::getline(ifs, description, ':');
+        ifs >> this->performInitialGradientFlow;
+
+        std::getline(ifs, description, ':');
+        ifs >> this->gradientFlowStepSize;
+
+        std::getline(ifs, description, ':');
+        ifs >> this->gradientFlowTimesteps;
+
+        std::getline(ifs, description, ':');
+        ifs >> this->stopGradientFlowOnResiduals;
+
+        std::getline(ifs, description, ':');
+        ifs >> this->scalarEquationResidualTolerance;
+
+        std::getline(ifs, description, ':');
+        ifs >> this->gaugeEquationResidualTolerance;
+
+        // Optional physical dynamical phase
+        std::getline(ifs, description, ':');
+        ifs >> this->performDynamicalEvolution;
+
+        this->activeEvolutionStep = this->dt;
+
+        if (!std::isfinite(this->dt) || this->dt <= 0.0)
+        {
+            throw std::runtime_error(
+                "LATTICE:: The dynamical timestep must be finite and positive."
+            );
+        }
+
+        if (this->performInitialGradientFlow
+            && this->gradientFlowTimesteps > 0U
+            && (!std::isfinite(this->gradientFlowStepSize)
+                || this->gradientFlowStepSize <= 0.0))
+        {
+            throw std::runtime_error(
+                "LATTICE:: The gradient-flow step size must be finite and positive."
+            );
+        }
+
+        if (this->performInitialGradientFlow
+            && this->stopGradientFlowOnResiduals
+            && (!std::isfinite(this->scalarEquationResidualTolerance)
+                || this->scalarEquationResidualTolerance <= 0.0
+                || !std::isfinite(this->gaugeEquationResidualTolerance)
+                || this->gaugeEquationResidualTolerance <= 0.0))
+        {
+            throw std::runtime_error(
+                "LATTICE:: Gradient-flow residual tolerances "
+                "must be finite and positive."
+            );
+        }
+
+
 
         /////////////  Field components  ///////////////
         std::getline(ifs, description);
@@ -101,7 +168,7 @@ void Lattice::configure(const std::string path, const bool debug)
         std::getline(ifs, description, ':');
         ifs >> light_crossing_override;
 
-        if (light_crossing_override)
+        if (light_crossing_override && this->performDynamicalEvolution)
         {
             float num_light_crossings;
             std::getline(ifs, description, ':');
@@ -168,12 +235,32 @@ void Lattice::configure(const std::string path, const bool debug)
                   << ", Vector initial condition type: " << initialConditionTypes[1] << "\n"
                   << "Face boundary condition types:";
 
-        for (unsigned iter = 0; iter < 6; iter++)
+        for (unsigned iter = 0; iter < 6; iter++){
             std::cout << " " << faceBoundaryConditionTypes[iter];
+        }
+        std::cout << "\n";
 
+        std::cout
+                << "Initial gradient flow?: "
+                << this->performInitialGradientFlow
+                << ", step size: "
+                << this->gradientFlowStepSize
+                << ", steps: "
+                << this->gradientFlowTimesteps
+                << ", residual stopping?: "
+                << this->stopGradientFlowOnResiduals
+                << ", scalar tolerance: "
+                << this->scalarEquationResidualTolerance
+                << ", gauge tolerance: "
+                << this->gaugeEquationResidualTolerance
+                << "\nPerform dynamical evolution?: "
+                << this->performDynamicalEvolution
+                << "\n";
+        
         std::cout << "\nOutput fields?: " << analysisChoices[0]
                   << "\nOutput energy?: " << analysisChoices[1]
                   << "\nOutput gauge condition violation?: " << analysisChoices[2]
+                  << "\n"
                   << std::endl;
 
         std::cout << "Report progress?: " << this->progressReport << ", every " << this->reportFrequency << " timesteps.\n" << std::endl;
@@ -494,7 +581,7 @@ void Lattice::initBoundaryCondition(const std::vector<int> &face_boundary_condit
 
             this->boundaryConditions.push_back( new Fixed(this->scalarFields, this->vectorFields, this->analysers,
                                                           this->numScalarFieldComponents, this->numVectorFieldComponents,
-                                                          this->model, this->storageNx, this->ny, this->nz, this->dt,
+                                                          this->model, this->storageNx, this->ny, this->nz, this->activeEvolutionStep,
                                                           bound_vector)
                                               );
             break;
@@ -509,7 +596,7 @@ void Lattice::initBoundaryCondition(const std::vector<int> &face_boundary_condit
 
             this->boundaryConditions.push_back( new Periodic(this->scalarFields, this->vectorFields, this->analysers,
                                                              this->numScalarFieldComponents, this->numVectorFieldComponents,
-                                                             this->model, this->storageNx, this->ny, this->nz, this->dt,
+                                                             this->model, this->storageNx, this->ny, this->nz, this->activeEvolutionStep,
                                                              bound_vector)
                                               );
             break;
@@ -527,7 +614,7 @@ void Lattice::initBoundaryCondition(const std::vector<int> &face_boundary_condit
                     this->storageNx,
                     this->ny,
                     this->nz,
-                    this->dt,
+                    this->activeEvolutionStep,
                     bound_vector)
             );
             break;
@@ -615,6 +702,50 @@ void Lattice::initFields()
     {
         std::cout << "Initial conditions generated.\n" << std::endl;
     }
+}
+
+void Lattice::synchroniseTimeBuffers(const unsigned source_time_index)
+{
+    if (source_time_index > 1U)
+    {
+        throw std::runtime_error(
+            "LATTICE:: Invalid source time-buffer index."
+        );
+    }
+
+    const std::size_t storage_volume
+        = static_cast<std::size_t>(this->storageNx)
+        *this->ny*this->nz;
+
+    const unsigned destination_time_index
+        = 1U - source_time_index;
+
+    const auto copy_buffer =
+        [source_time_index, destination_time_index](
+            std::vector<float> &fields,
+            const std::size_t buffer_size)
+    {
+        if (buffer_size == 0U)
+            return;
+
+        std::copy_n(
+            fields.begin()
+                + source_time_index*buffer_size,
+            buffer_size,
+            fields.begin()
+                + destination_time_index*buffer_size
+        );
+    };
+
+    copy_buffer(
+        this->scalarFields,
+        storage_volume*this->numScalarFieldComponents
+    );
+
+    copy_buffer(
+        this->vectorFields,
+        storage_volume*this->numVectorFieldComponents
+    );
 }
 
 ////////////////////////////////////////////////  Private Functions  /////////////////////////////////////////////////////
@@ -1156,6 +1287,13 @@ Lattice::Lattice(const int rank, const int num_ranks)
     this->initBoundaryCondition(this->faceBoundaryConditionTypes);
 
     this->initFields();
+    if (this->performInitialGradientFlow
+    && this->gradientFlowTimesteps > 0U)
+    {
+        // Buffer 1 is the initial current configuration.
+        // Gradient flow starts with no pre-existing flow velocity.
+        this->synchroniseTimeBuffers(1U);
+    }
     // Both stored initial time levels must have valid neighbour support before
     // any stencil-based operation is allowed to inspect them.
     this->exchangeHalos(0U);
@@ -1212,6 +1350,42 @@ void Lattice::initialAnalysis() const
 
 void Lattice::evolve()
 {
+    const unsigned maximum_gradient_flow_steps
+        = this->performInitialGradientFlow
+        ? this->gradientFlowTimesteps
+        : 0U;
+
+    unsigned num_gradient_flow_steps
+        = maximum_gradient_flow_steps;
+
+    const unsigned num_dynamical_steps
+        = this->performDynamicalEvolution
+        ? this->nt
+        : 0U;
+
+    if (num_gradient_flow_steps > std::numeric_limits<unsigned>::max() - num_dynamical_steps)
+    {
+        throw std::runtime_error(
+            "LATTICE:: Total number of evolution steps overflows unsigned."
+        );
+    }
+
+    unsigned total_evolution_steps = num_gradient_flow_steps + num_dynamical_steps;
+    if (total_evolution_steps == 0U)
+    {
+        if (this->rank == 0)
+        {
+            std::cout
+                << "LATTICE::WARNING: Neither gradient flow nor "
+                << "dynamical evolution has been requested.\n"
+                << std::endl;
+        }
+
+        return;
+    }
+
+
+
     // Get start time of evolution stage if reporting progress.
     std::chrono::steady_clock::time_point start_time;
     if (this->progressReport)
@@ -1238,14 +1412,24 @@ void Lattice::evolve()
     if (this->progressReport && this->rank == 0)   
         std::cout << "Beginning evolution." << std::endl;
 
-    for (unsigned time_iter = 0; time_iter < this->nt; time_iter++)
+    for (unsigned time_iter = 0; time_iter < total_evolution_steps; time_iter++)
     {
+        // Gradient flow?
+        const bool using_gradient_flow = time_iter < num_gradient_flow_steps;
+        const unsigned phase_time_iter = using_gradient_flow ? time_iter : time_iter - num_gradient_flow_steps;
+        this->activeEvolutionStep = using_gradient_flow ? this->gradientFlowStepSize : this->dt;
+        this->model.setEvolutionMode( using_gradient_flow, this->activeEvolutionStep);
+
+
         // Track which parts of the array are the current timestep and which are the previous.
         unsigned t_now = (time_iter+1)%2;
         unsigned t_past = !t_now;
 
         // Update model internal evolution parameters that depend upon the timestep
-        model.update(time_iter);
+        model.update(phase_time_iter);
+
+        if (using_gradient_flow)
+            this->model.resetGradientFlowResiduals();
 
         // Evolve grid points that are near/on boundaries. Once this is
         // complete, the new outgoing x-interface strips in t_past are ready.
@@ -1312,7 +1496,7 @@ void Lattice::evolve()
                     
 
                     // Calculate the fields at the next timestep.
-                    this->model.evolve(local_scalar_pointers, local_vector_pointers, this->dt,
+                    this->model.evolve(local_scalar_pointers, local_vector_pointers, this->activeEvolutionStep,
                                        this->numScalarFieldComponents, this->numVectorFieldComponents);
                     
                 }
@@ -1324,23 +1508,136 @@ void Lattice::evolve()
         // timestep is allowed to read them.
         this->finishHaloExchange(halo_exchange);
 
+        //Optional Grad flow residual check
+        const unsigned completed_phase_steps = phase_time_iter + 1U;
+
+        double global_scalar_residual = 0.0;
+        double global_gauge_residual = 0.0;
+        bool residual_tolerances_satisfied = false;
+
+        if (using_gradient_flow
+            && this->stopGradientFlowOnResiduals)
+        {
+            std::array<double, 2> local_residuals{
+                this->model.getMaxScalarEquationResidual(),
+                this->model.getMaxGaugeEquationResidual()
+            };
+
+            std::array<double, 2> global_residuals
+                = local_residuals;
+
+            #ifdef GFT_ENABLE_MPI
+            if (this->numRanks > 1)
+            {
+                const int reduce_error = MPI_Allreduce(
+                    local_residuals.data(),
+                    global_residuals.data(),
+                    static_cast<int>(global_residuals.size()),
+                    MPI_DOUBLE,
+                    MPI_MAX,
+                    MPI_COMM_WORLD
+                );
+
+                if (reduce_error != MPI_SUCCESS)
+                {
+                    throw std::runtime_error(
+                        "LATTICE:: MPI gradient-flow "
+                        "residual reduction failed."
+                    );
+                }
+            }
+            #endif
+
+            global_scalar_residual = global_residuals[0];
+            global_gauge_residual = global_residuals[1];
+
+            residual_tolerances_satisfied
+                = global_scalar_residual
+                    <= this->scalarEquationResidualTolerance
+                && global_gauge_residual
+                    <= this->gaugeEquationResidualTolerance;
+
+            if (residual_tolerances_satisfied)
+            {
+                num_gradient_flow_steps
+                    = completed_phase_steps;
+
+                total_evolution_steps
+                    = num_gradient_flow_steps
+                    + num_dynamical_steps;
+            }
+        }
+
         // Run post-evolution location analyses only after the new
         // timestep is complete across the full dynamic grid.
         this->postEvolveAnalysis(t_now, loop_limits);
+
+        // Synchronises timesteps at the end of a gradient flow period.
+        if (using_gradient_flow
+            && completed_phase_steps
+                == num_gradient_flow_steps)
+        {
+            // t_past contains the newest relaxed configuration.
+            this->synchroniseTimeBuffers(t_past);
+        }
 
         // Run all continous analyser functions that don't need to happen at every location in the dynamic grid.
         for (auto analyser : this->analysers)
             analyser->timestepAnalysis(time_iter);
 
-        // Replace with a function that has some more nice features.
-        if (this->progressReport && this->rank == 0
-            && (time_iter + 1)%this->reportFrequency == 0)
+        // Report progress using the counter for the current phase.
+        const unsigned phase_total_steps
+            = using_gradient_flow
+            ? num_gradient_flow_steps
+            : num_dynamical_steps;
+
+        if (this->progressReport
+            && this->rank == 0
+            && ((completed_phase_steps % this->reportFrequency == 0U)
+                || completed_phase_steps == phase_total_steps))
         {
             std::cout
-                << "Timestep "
-                << std::to_string(time_iter + 1)
-                << " completed.\r"
+                << (using_gradient_flow
+                    ? "GradFlow timestep: "
+                    : "Dynamical timestep: ")
+                << completed_phase_steps
+                << " completed."
                 << std::endl;
+
+            if (using_gradient_flow
+                && this->stopGradientFlowOnResiduals)
+            {
+                std::cout
+                    << "Scalar EOM residual: "
+                    << global_scalar_residual
+                    << ", gauge EOM residual: "
+                    << global_gauge_residual
+                    << "."
+                    << std::endl;
+            }
+
+            if (using_gradient_flow
+                && this->stopGradientFlowOnResiduals
+                && this->rank == 0)
+            {
+                if (residual_tolerances_satisfied)
+                {
+                    std::cout
+                        << "Gradient flow converged after "
+                        << completed_phase_steps
+                        << " timesteps."
+                        << std::endl;
+                }
+                else if (completed_phase_steps
+                    == maximum_gradient_flow_steps)
+                {
+                    std::cout
+                        << "LATTICE::WARNING: Gradient flow reached "
+                        << "its maximum number of timesteps before "
+                        << "both residual tolerances were satisfied."
+                        << std::endl;
+                }
+            }
         }
 
     }
@@ -1364,11 +1661,6 @@ void Lattice::evolve()
 
             std::chrono::duration<double> elapsed_time
                 = end_time - start_time;
-
-            std::cout
-                << "Timestep "
-                << std::to_string(this->nt)
-                << " completed.\n";
 
             std::cout
                 << "Evolution finished in "

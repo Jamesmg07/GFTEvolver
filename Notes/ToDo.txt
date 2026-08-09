@@ -27,6 +27,4 @@ a theoretical argument to suggest that the gauge conditions should be satisfied 
 period. Add an explanation of theory on why a conserved current should preserve the gauge condition, as long
 as it is initially satisfied.
 
-7) Add in a gradient flow option under lattice class. Eventually, core will have a new class called Solver,
-which allows the type of solver to be changed (currently leapfrog). Once this is done, gradient flow vs 
-standard evolution can be handled by the solver config.
+7) Gradient flow option implemented. However eventually this will be abstracted out to a new Solver Class
