@@ -398,6 +398,11 @@ void Lattice::initInitialCondition(const std::vector<int> &initial_condition_typ
         this->scalarInitialConditions = new RandomUniform();
         break;
 
+    case USER_DEFINED_PROFILE_IC:
+
+        this->scalarInitialConditions = new UserDefinedProfile(UserDefinedProfile::FieldType::Scalar);
+        break;
+
     default:
 
         std::cout << "LATTICE::WARNING: Initial condition type (" << initial_condition_types[0] <<  ") for the scalar fields is invalid.\n"
@@ -417,6 +422,11 @@ void Lattice::initInitialCondition(const std::vector<int> &initial_condition_typ
     case RANDOM_UNIFORM_IC:
 
         this->vectorInitialConditions = new RandomUniform();
+        break;
+
+    case USER_DEFINED_PROFILE_IC:
+
+        this->vectorInitialConditions = new UserDefinedProfile(UserDefinedProfile::FieldType::Gauge, this->model.isUsingQuaternionRepresentation());
         break;
 
     default:

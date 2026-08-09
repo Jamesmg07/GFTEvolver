@@ -4,6 +4,7 @@
 
 #include "InitialCondition.hpp"
 #include "RandomUniform.hpp"
+#include "UserDefinedProfile.hpp"
 
 #include "BoundaryCondition.hpp"
 #include "Periodic.hpp"
@@ -17,7 +18,7 @@
 
 #include <chrono>
 
-enum Initial_Condition_Types {ZERO_IC = 0, RANDOM_UNIFORM_IC};
+enum Initial_Condition_Types{ZERO_IC = 0, RANDOM_UNIFORM_IC = 1, USER_DEFINED_PROFILE_IC = 2};
 enum Boundary_Condition_Types {UNASSIGNED_BOUNDARY_CONDITION = 0, FIXED = 1, NEUMANN = 2, PERIODIC = 3, INTERIOR = 4};
 
 class Lattice

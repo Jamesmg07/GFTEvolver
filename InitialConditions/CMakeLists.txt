@@ -8,6 +8,7 @@ set(
   SOURCES
   "${CMAKE_CURRENT_SOURCE_DIR}/Source/InitialCondition.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/Source/RandomUniform.cpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/Source/UserDefinedProfile.cpp"
 )
 
 # Create a library
