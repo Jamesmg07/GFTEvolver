@@ -28,6 +28,11 @@ target_compile_definitions(Analysers PRIVATE
     DATA_DIR="${CMAKE_SOURCE_DIR}/Data"
 )
 
+if (GFT_ENABLE_MPI)
+    target_compile_definitions(Analysers PRIVATE GFT_ENABLE_MPI)
+    target_link_libraries(Analysers PUBLIC MPI::MPI_CXX)
+endif()
+
 # -----------------------------
 # Header files set-up
 # -----------------------------

@@ -17,6 +17,11 @@ private:
     const std::vector<float> &scalarFields, &vectorFields;
     const unsigned &numScalarComponents, &numVectorComponents;
 
+    // Rank-local storage geometry. The owned x-slab is a contiguous range in
+    // flattened [x][y][z] site ordering; halos lie outside this range.
+    long long unsigned storageVolume, ownedSiteBegin, ownedSiteEnd;
+    int rank, numRanks;
+
     //////////////////////////////////////////////////  Initialisers  ///////////////////////////////////////////////////////
 
     /*
@@ -27,6 +32,19 @@ private:
      */
     void configure(const std::string path, const bool debug = false);
 
+    /*
+    * Add the requested rank suffix before the filename extension for
+    * multi-rank output. The one-rank filename is left unchanged.
+    */
+    std::string rankLocalPath(const std::string &path, const int file_rank) const;
+
+    /*
+    * Reassemble one logical field output from its rank-local pieces.
+    * Rank files are removed only after the merged file is complete.
+    */
+    void mergeRankOutput(
+        const std::string &path,
+        const std::vector<unsigned long long> &owned_site_counts) const;
 
     /*
     * Outputs the requested field configuration.
@@ -42,8 +60,15 @@ public:
 
     ////////////////////////////////////////////  Constructors/Destructors  /////////////////////////////////////////////////
 
-    OutputFields(const std::vector<float> &scalar_fields, const unsigned &num_scalar_components,
-                 const std::vector<float> &vector_fields, const unsigned &num_vector_components);
+    OutputFields(const std::vector<float> &scalar_fields,
+             const unsigned &num_scalar_components,
+             const std::vector<float> &vector_fields,
+             const unsigned &num_vector_components,
+             const long long unsigned storage_volume,
+             const long long unsigned owned_site_begin,
+             const long long unsigned owned_site_end,
+             const int rank,
+             const int num_ranks);
     virtual ~OutputFields();
 
     ////////////////////////////////////////////////  Public Functions  /////////////////////////////////////////////////////

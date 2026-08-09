@@ -18,12 +18,27 @@ BoundaryCondition::~BoundaryCondition()
 {
 }
 
-bool BoundaryCondition::determineResponsibilities(const unsigned &stencil_size)
+bool BoundaryCondition::determineResponsibilities(
+    const unsigned &stencil_size,
+    const unsigned &owned_x_begin,
+    const unsigned &owned_x_end)
 {
-    // Useful to define an array of the number of grid points in each direction
-    std::vector<unsigned> lattice_sizes{this->nx, this->ny, this->nz};
+    // nx is the allocated local x-width including halos.
+    // Responsibilities are restricted to the owned physical interval.
+    std::vector<unsigned> lattice_begins{
+        owned_x_begin, 0U, 0U
+    };
 
-    // Check whether this boundary has no responsibilities
+    std::vector<unsigned> lattice_ends{
+        owned_x_end, this->ny, this->nz
+    };
+
+    std::vector<unsigned> lattice_sizes{
+        owned_x_end - owned_x_begin,
+        this->ny,
+        this->nz
+    };
+
     bool is_empty = false;
 
     for (unsigned iter = 0; iter < 3; iter++)
@@ -31,39 +46,51 @@ bool BoundaryCondition::determineResponsibilities(const unsigned &stencil_size)
         switch (this->boundVector[iter])
         {
         case -1:
-            
-            this->loopLimits[iter][0] = 0;
-            this->loopLimits[iter][1] = stencil_size;
+
+            this->loopLimits[iter][0] = lattice_begins[iter];
+            this->loopLimits[iter][1] =
+                lattice_begins[iter] + stencil_size;
             break;
 
         case 0:
 
-            this->loopLimits[iter][0] = stencil_size;
+            this->loopLimits[iter][0] =
+                lattice_begins[iter] + stencil_size;
 
             if (lattice_sizes[iter] < 2*stencil_size)
-                this->loopLimits[iter][1] = stencil_size;
+                this->loopLimits[iter][1] =
+                    lattice_begins[iter] + stencil_size;
             else
-                this->loopLimits[iter][1] = lattice_sizes[iter] - stencil_size;
+                this->loopLimits[iter][1] =
+                    lattice_ends[iter] - stencil_size;
             break;
 
         case 1:
-            
-            if (lattice_sizes[iter] < 2*stencil_size)
-                this->loopLimits[iter][0] = stencil_size;
-            else
-                this->loopLimits[iter][0] = lattice_sizes[iter] - stencil_size;
 
-            this->loopLimits[iter][1] = lattice_sizes[iter];
+            if (lattice_sizes[iter] < 2*stencil_size)
+                this->loopLimits[iter][0] =
+                    lattice_begins[iter] + stencil_size;
+            else
+                this->loopLimits[iter][0] =
+                    lattice_ends[iter] - stencil_size;
+
+            this->loopLimits[iter][1] = lattice_ends[iter];
             break;
-        
+
         default:
 
-            std::cout << "BOUNDARYCONDITION::ERROR: Invalid boundVector component: " << this->boundVector[iter] << std::endl;
+            std::cout
+                << "BOUNDARYCONDITION::ERROR: Invalid boundVector component: "
+                << this->boundVector[iter]
+                << std::endl;
             break;
         }
 
-        if (this->loopLimits[iter][0] >= this->loopLimits[iter][1])
+        if (this->loopLimits[iter][0] >=
+            this->loopLimits[iter][1])
+        {
             is_empty = true;
+        }
     }
 
     return is_empty;

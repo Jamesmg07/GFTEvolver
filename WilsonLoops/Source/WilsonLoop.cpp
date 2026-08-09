@@ -82,3 +82,8 @@ std::vector<double> NullWilsonLoop::calcElectricContributions(const float *const
 void NullWilsonLoop::evolve(float *const local_vector_fields[2], std::vector<double> equation_RHS)
 {
 }
+
+unsigned NullWilsonLoop::getDefaultStencilSize() const
+{
+    return 0;
+}

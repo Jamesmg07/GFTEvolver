@@ -1,4 +1,12 @@
 #include "OutputFields.hpp"
+#include <algorithm>
+#include <cstddef>
+#include <filesystem>
+#include <stdexcept>
+
+#ifdef GFT_ENABLE_MPI
+#include <mpi.h>
+#endif
 
 ////////////////////////////////////////////////////  Initialisers  /////////////////////////////////////////////////////////////
 
@@ -60,72 +68,276 @@ void OutputFields::configure(const std::string path, const bool debug)
 }
 
 
+std::string OutputFields::rankLocalPath(const std::string &path, const int file_rank) const
+{
+    if (this->numRanks == 1)
+        return path;
+
+    const std::string suffix
+        = "_rank" + std::to_string(file_rank);
+
+    const std::size_t separator_position
+        = path.find_last_of("/\\");
+
+    const std::size_t extension_position
+        = path.find_last_of('.');
+
+    if (extension_position == std::string::npos ||
+        (separator_position != std::string::npos &&
+         extension_position < separator_position))
+    {
+        return path + suffix;
+    }
+
+    return path.substr(0, extension_position)
+         + suffix
+         + path.substr(extension_position);
+}
+
+
+void OutputFields::mergeRankOutput(
+    const std::string &path,
+    const std::vector<unsigned long long> &owned_site_counts) const
+{
+    namespace fs = std::filesystem;
+
+    if (this->numRanks == 1)
+        return;
+
+    if (owned_site_counts.size()
+        != static_cast<std::size_t>(this->numRanks))
+    {
+        throw std::runtime_error(
+            "ANALYSERS::OUTPUTFIELDS:: Invalid MPI site-count data."
+        );
+    }
+
+    const fs::path output_path
+        = fs::path(DATA_DIR)/path;
+
+    const fs::path temporary_path
+        = fs::path(output_path.string() + ".merge_tmp");
+
+    std::vector<fs::path> rank_paths;
+    rank_paths.reserve(static_cast<std::size_t>(this->numRanks));
+
+    for (int file_rank = 0;
+         file_rank < this->numRanks;
+         file_rank++)
+    {
+        const fs::path rank_path
+            = fs::path(DATA_DIR)
+            / this->rankLocalPath(path, file_rank);
+
+        if (!fs::exists(rank_path))
+        {
+            throw std::runtime_error(
+                "ANALYSERS::OUTPUTFIELDS:: Missing rank-local field file: "
+                + rank_path.string()
+            );
+        }
+
+        rank_paths.push_back(rank_path);
+    }
+
+    std::ofstream merged(
+        temporary_path,
+        std::ios::binary | std::ios::trunc);
+
+    if (!merged.is_open())
+    {
+        throw std::runtime_error(
+            "ANALYSERS::OUTPUTFIELDS:: Could not create merged field file: "
+            + temporary_path.string()
+        );
+    }
+
+    if (!this->outputBothTimesteps)
+    {
+        // With one stored timestep, rank order is already global x order.
+        for (const fs::path &rank_path : rank_paths)
+        {
+            std::ifstream rank_file(rank_path, std::ios::binary);
+
+            if (!rank_file.is_open())
+            {
+                throw std::runtime_error(
+                    "ANALYSERS::OUTPUTFIELDS:: Could not read rank-local field file: "
+                    + rank_path.string()
+                );
+            }
+
+            merged << rank_file.rdbuf();
+
+            if (rank_file.bad() || !merged)
+            {
+                throw std::runtime_error(
+                    "ANALYSERS::OUTPUTFIELDS:: Failed while merging field output."
+                );
+            }
+        }
+    }
+    else
+    {
+        // Each rank file is [t0 slab][t1 slab].
+        // Reconstruct [global t0][global t1].
+        for (unsigned time_index = 0U;
+             time_index < 2U;
+             time_index++)
+        {
+            for (int file_rank = 0;
+                 file_rank < this->numRanks;
+                 file_rank++)
+            {
+                std::ifstream rank_file(
+                    rank_paths[static_cast<std::size_t>(file_rank)],
+                    std::ios::binary);
+
+                if (!rank_file.is_open())
+                {
+                    throw std::runtime_error(
+                        "ANALYSERS::OUTPUTFIELDS:: Could not read rank-local field file."
+                    );
+                }
+
+                const unsigned long long site_count
+                    = owned_site_counts[
+                        static_cast<std::size_t>(file_rank)];
+
+                std::string line;
+
+                // For t1, pass over this rank's t0 block first.
+                for (unsigned long long line_iter = 0;
+                     line_iter < time_index*site_count;
+                     line_iter++)
+                {
+                    if (!std::getline(rank_file, line))
+                    {
+                        throw std::runtime_error(
+                            "ANALYSERS::OUTPUTFIELDS:: Rank-local field file is shorter than expected."
+                        );
+                    }
+                }
+
+                for (unsigned long long line_iter = 0;
+                     line_iter < site_count;
+                     line_iter++)
+                {
+                    if (!std::getline(rank_file, line))
+                    {
+                        throw std::runtime_error(
+                            "ANALYSERS::OUTPUTFIELDS:: Rank-local field file is shorter than expected."
+                        );
+                    }
+
+                    merged.write(
+                        line.data(),
+                        static_cast<std::streamsize>(line.size()));
+
+                    merged.put('\n');
+                }
+
+                if (!merged)
+                {
+                    throw std::runtime_error(
+                        "ANALYSERS::OUTPUTFIELDS:: Failed while merging field output."
+                    );
+                }
+            }
+        }
+    }
+
+    merged.close();
+
+    if (!merged)
+    {
+        throw std::runtime_error(
+            "ANALYSERS::OUTPUTFIELDS:: Failed to complete merged field file."
+        );
+    }
+
+    // Only replace/remove files after a complete merged file exists.
+    if (fs::exists(output_path))
+        fs::remove(output_path);
+
+    fs::rename(temporary_path, output_path);
+
+    for (const fs::path &rank_path : rank_paths)
+    {
+        if (!fs::remove(rank_path))
+        {
+            throw std::runtime_error(
+                "ANALYSERS::OUTPUTFIELDS:: Could not remove merged rank-local file: "
+                + rank_path.string()
+            );
+        }
+    }
+}
+
+
 void OutputFields::outputFields(const std::string &path,
                                 const unsigned &time_step) const
 {
-    std::ofstream ofs(std::string(DATA_DIR) + "/" + path);
+    std::ofstream ofs(
+        std::string(DATA_DIR) + "/" + this->rankLocalPath(path, this->rank));
 
     if (ofs.is_open())
     {
-        long long unsigned loop_max;
-        long long unsigned start_scalar_index;
-        long long unsigned start_vector_index;
+        const unsigned first_time_index
+            = this->outputBothTimesteps
+            ? 0U
+            : (time_step + 1)%2;
 
-        if (this->outputBothTimesteps)
+        const unsigned time_count
+            = this->outputBothTimesteps ? 2U : 1U;
+
+        for (unsigned time_iter = 0;
+             time_iter < time_count;
+             time_iter++)
         {
-            loop_max
-                = this->scalarFields.size()/this->numScalarComponents;
+            const unsigned time_index
+                = this->outputBothTimesteps
+                ? time_iter
+                : first_time_index;
 
-            start_scalar_index = 0;
-            start_vector_index = 0;
-        }
-        else
-        {
-            const unsigned current_time_index
-                = (time_step + 1)%2;
-
-            loop_max
-                = this->scalarFields.size()
-                  /(2ULL*this->numScalarComponents);
-
-            start_scalar_index
-                = current_time_index
-                  *loop_max
+            const unsigned long long scalar_time_offset
+                = 1ULL*time_index*this->storageVolume
                   *this->numScalarComponents;
 
-            start_vector_index
-                = current_time_index
-                  *loop_max
+            const unsigned long long vector_time_offset
+                = 1ULL*time_index*this->storageVolume
                   *this->numVectorComponents;
-        }
 
-        for (long long unsigned iter = 0;
-             iter < loop_max;
-             iter++)
-        {
-            // Output the scalar fields at this location.
-            for (unsigned compIter = 0;
-                 compIter < this->numScalarComponents;
-                 compIter++)
+            for (unsigned long long site_iter = this->ownedSiteBegin;
+                 site_iter < this->ownedSiteEnd;
+                 site_iter++)
             {
-                ofs << this->scalarFields[
-                    start_scalar_index
-                    + iter*this->numScalarComponents
-                    + compIter] << " ";
-            }
+                const unsigned long long scalar_index
+                    = scalar_time_offset
+                    + site_iter*this->numScalarComponents;
 
-            // Output the vector fields at this location.
-            for (unsigned compIter = 0;
-                 compIter < this->numVectorComponents;
-                 compIter++)
-            {
-                ofs << this->vectorFields[
-                    start_vector_index
-                    + iter*this->numVectorComponents
-                    + compIter] << " ";
-            }
+                const unsigned long long vector_index
+                    = vector_time_offset
+                    + site_iter*this->numVectorComponents;
 
-            ofs << std::endl;
+                for (unsigned comp_iter = 0;
+                     comp_iter < this->numScalarComponents;
+                     comp_iter++)
+                {
+                    ofs << this->scalarFields[
+                        scalar_index + comp_iter] << " ";
+                }
+
+                for (unsigned comp_iter = 0;
+                     comp_iter < this->numVectorComponents;
+                     comp_iter++)
+                {
+                    ofs << this->vectorFields[
+                        vector_index + comp_iter] << " ";
+                }
+
+                ofs << std::endl;
+            }
         }
     }
 
@@ -138,14 +350,31 @@ void OutputFields::outputFields(const std::string &path,
 
 ///////////////////////////////////////////////  Constructors/Destructors  //////////////////////////////////////////////////////
 
-OutputFields::OutputFields(const std::vector<float> &scalar_fields, const unsigned &num_scalar_components,
-                           const std::vector<float> &vector_fields, const unsigned &num_vector_components)
-    : Analyser(), 
-      scalarFields(scalar_fields), numScalarComponents(num_scalar_components),
-      vectorFields(vector_fields), numVectorComponents(num_vector_components)
+OutputFields::OutputFields(
+    const std::vector<float> &scalar_fields,
+    const unsigned &num_scalar_components,
+    const std::vector<float> &vector_fields,
+    const unsigned &num_vector_components,
+    const long long unsigned storage_volume,
+    const long long unsigned owned_site_begin,
+    const long long unsigned owned_site_end,
+    const int rank,
+    const int num_ranks)
+    : Analyser(),
+      scalarFields(scalar_fields),
+      vectorFields(vector_fields),
+      numScalarComponents(num_scalar_components),
+      numVectorComponents(num_vector_components),
+      storageVolume(storage_volume),
+      ownedSiteBegin(owned_site_begin),
+      ownedSiteEnd(owned_site_end),
+      rank(rank),
+      numRanks(num_ranks)
 {
     this->completedTimesteps = 0;
-    this->configure(std::string(SOURCE_DIR) + "/Config/OutputFields.cfg", true);
+    this->configure(
+        std::string(SOURCE_DIR) + "/Config/OutputFields.cfg",
+        true);
 }
 
 OutputFields::~OutputFields()
@@ -198,6 +427,93 @@ void OutputFields::finalAnalysis()
             this->finalAnalysisPath,
             this->completedTimesteps);
     }
+
+    if (this->numRanks == 1)
+        return;
+
+    std::vector<std::string> output_paths;
+
+    const auto add_output_path = [&output_paths](const std::string &path)
+    {
+        if (std::find(output_paths.begin(), output_paths.end(), path)
+            == output_paths.end())
+        {
+            output_paths.push_back(path);
+        }
+    };
+
+    if (this->outputInitial)
+        add_output_path(this->initialAnalysisPath);
+
+    if (this->outputContinual)
+    {
+        for (unsigned timestep = this->outputFrequency;
+             timestep <= this->completedTimesteps;
+             timestep += this->outputFrequency)
+        {
+            add_output_path(
+                this->continualAnalysisPath
+                + "_"
+                + std::to_string(timestep)
+                + ".dat");
+        }
+    }
+
+    if (this->outputFinal)
+        add_output_path(this->finalAnalysisPath);
+
+    if (output_paths.empty())
+        return;
+
+#ifndef GFT_ENABLE_MPI
+
+    throw std::runtime_error(
+        "ANALYSERS::OUTPUTFIELDS:: Multi-rank output merging requires "
+        "MPI build."
+    );
+
+#else
+
+    const unsigned long long local_owned_site_count
+        = this->ownedSiteEnd - this->ownedSiteBegin;
+
+    std::vector<unsigned long long> owned_site_counts(
+        this->rank == 0
+            ? static_cast<std::size_t>(this->numRanks)
+            : 0U);
+
+    const int gather_error = MPI_Gather(
+        &local_owned_site_count,
+        1,
+        MPI_UNSIGNED_LONG_LONG,
+        this->rank == 0 ? owned_site_counts.data() : nullptr,
+        1,
+        MPI_UNSIGNED_LONG_LONG,
+        0,
+        MPI_COMM_WORLD);
+
+    if (gather_error != MPI_SUCCESS)
+    {
+        throw std::runtime_error(
+            "ANALYSERS::OUTPUTFIELDS:: Failed to gather MPI output metadata."
+        );
+    }
+
+    if (this->rank == 0)
+    {
+        for (const std::string &path : output_paths)
+            this->mergeRankOutput(path, owned_site_counts);
+    }
+
+    // Hold the other ranks here while rank 0 completes the disk merge.
+    if (MPI_Barrier(MPI_COMM_WORLD) != MPI_SUCCESS)
+    {
+        throw std::runtime_error(
+            "ANALYSERS::OUTPUTFIELDS:: MPI barrier failed after field merge."
+        );
+    }
+
+#endif
 }
 
  

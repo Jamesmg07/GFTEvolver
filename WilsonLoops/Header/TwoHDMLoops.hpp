@@ -5,6 +5,10 @@
 #include <cmath>
 #include <iomanip>
 
+#include <array>
+#include <cmath>
+#include <iomanip>
+
 // Handles all details related to the field strength-tensor, as used in the 2HDM.
 
 namespace WilsonLoops{
@@ -47,6 +51,8 @@ namespace WilsonLoops{
 
         //////////////////////////////////////////////  Private Functions  /////////////////////////////////////////////
 
+        using SU2Representation = std::array<double, 4>;
+
         /*
          * Returns the SU(2) matrix pointed to, in a different representation.
          * The input representation is assumed to be in the form e^{iw_i^a\sigma^a}.
@@ -59,8 +65,8 @@ namespace WilsonLoops{
          * 
          * @return       vector<double>                        The coefficents of the SU(2) representation described above.
          */
-        std::vector<double> getSU2Representation(const float* const vector_pointer, const long long int dir_index, const unsigned offset, 
-                                                 const bool conjugate) const;
+        SU2Representation getSU2Representation(const float* const vector_pointer, const long long int dir_index,
+            const unsigned offset, const bool conjugate) const;
 
         /*
          * Does the opposite of above. Takes in a representation of SU(2) like (c^0, c^a) and returns w_i^a.
@@ -70,7 +76,7 @@ namespace WilsonLoops{
          * 
          * @return       vector<float>                               Array of w_i^a components (3).
          */
-        std::vector<float> invertSU2Representation(const std::vector<double> U_representation) const;
+        std::vector<float> invertSU2Representation(const SU2Representation &U_representation) const;
 
         /*
          * Returns the matrix product of two SU(2) matrices. The inputs are assumed to have size 4, with the components
@@ -83,7 +89,7 @@ namespace WilsonLoops{
          * 
          * @return       vector<float>                   Returns a representation of the resulting SU(2).
          */
-        std::vector<double> SU2Product(const std::vector<double> U1, const std::vector<double> U2, const bool calc_trace) const;
+        SU2Representation SU2Product(const SU2Representation &U1,const SU2Representation &U2,const bool calc_trace) const;
 
     public:
 
@@ -192,6 +198,14 @@ namespace WilsonLoops{
         * @param        vector<double> equation_RHS                             Array containing the right-hand side of the equation, for all components.
         */
         void evolve(float* const local_vector_fields[2], std::vector<double> equation_RHS);
+
+
+        /*
+        * Returns the largest spatial distance from the local lattice site required by the wilson loops.
+        *
+        * @return        unsigned                                              The required spatial stencil size.
+        */
+        unsigned getDefaultStencilSize() const;
 
     };
 

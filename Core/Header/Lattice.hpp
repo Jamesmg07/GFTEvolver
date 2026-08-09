@@ -8,6 +8,7 @@
 #include "BoundaryCondition.hpp"
 #include "Periodic.hpp"
 #include "Fixed.hpp"
+#include "Interior.hpp"
 
 #include "Analyser.hpp"
 #include "OutputFields.hpp"
@@ -17,7 +18,7 @@
 #include <chrono>
 
 enum Initial_Condition_Types {ZERO_IC = 0, RANDOM_UNIFORM_IC};
-enum Boundary_Condition_Types {UNASSIGNED_BOUNDARY_CONDITION = 0, FIXED, NEUMANN, PERIODIC};
+enum Boundary_Condition_Types {UNASSIGNED_BOUNDARY_CONDITION = 0, FIXED = 1, NEUMANN = 2, PERIODIC = 3, INTERIOR = 4};
 
 class Lattice
 {
@@ -25,13 +26,30 @@ private:
 
     ///////////////////////////////////  Variables  ////////////////////////////////////////
 
-    unsigned nx, ny, nz, nt; // Lattice size
+    unsigned nx, ny, nz, nt; // Global physical lattice size
     double dx, dy, dz, dt; // Lattice spacings
+
+    int rank, numRanks; // MPI process index and total number of processes. Serial defaults are 0 and 1.
+
+    // X-slab geometry. nx remains the global physical x-size.
+    unsigned localNx;       // Physical x-planes owned by this rank.
+    unsigned storageNx;     // Local x storage including future halo planes.
+    unsigned globalXStart;  // First global x-index owned by this rank.
+    unsigned haloDepth;     // Halo radius required by the complete operator footprint.
+    unsigned ownedXBegin;   // First owned x-index in local storage.
+    unsigned ownedXEnd;     // One past the final owned x-index in local storage.
+    int leftRank, rightRank; // Process neighbours; -1 means no process neighbour.
 
     unsigned numScalarFieldComponents, numVectorFieldComponents; // Number of field components
     std::vector<float> scalarFields, vectorFields; // Field arrays
 
     unsigned stencilSize; // The largest default stencil size.
+
+    // Choices read from Lattice.cfg. Their corresponding objects are created
+    // only after the model and geometry required by those objects are known.
+    std::vector<int> initialConditionTypes;
+    std::vector<int> faceBoundaryConditionTypes;
+    std::vector<bool> analysisChoices;
 
     // Contains the potential, gradients and wilson loops.
     Model model;
@@ -76,6 +94,19 @@ private:
     void initInitialCondition(const std::vector<int> &initial_condition_types);
 
     /*
+    * Initialise Analyser classes based on the choices read from the lattice config file.
+    *
+    * @param        vector<bool> analysis_choices        Contains all analyser choices.
+    */
+    void initAnalysers(const std::vector<bool> &analysis_choices);
+
+    /*
+    * Determine this rank's x-slab ownership and future halo/storage geometry.
+    * nx is retained as the global x-size; this function does not allocate fields.
+    */
+    void initSlabGeometry();
+
+    /*
      * Instantiates the existing 26 boundary-region objects from the six
      * user-assigned face boundary conditions.
      *
@@ -92,9 +123,42 @@ private:
     ////////////////////////////////  Private Functions  /////////////////////////////////////
 
     /*
+    * State associated with one in-flight non-blocking halo exchange.
+    * The implementation lives in Lattice.cpp so MPI types do not need to
+    * appear in this header.
+    */
+    struct HaloExchange;
+
+    /*
+    * Post the receives and sends needed to populate the x halos of one
+    * stored time buffer. The caller may do independent work before
+    * finishHaloExchange() is called.
+    */
+    void beginHaloExchange(
+        const unsigned &t_step,
+        HaloExchange &exchange);
+
+    /*
+    * Wait for a previously posted halo exchange to complete.
+    */
+    void finishHaloExchange(HaloExchange &exchange);
+
+    /*
+    * Blocking convenience wrapper used where no overlap is required,
+    * in particular while constructing the initial two time buffers.
+    */
+    void exchangeHalos(const unsigned &t_step);
+
+    /*
      * Check the size of the largest default stencil being used by the gradients and wilson loops.
      */
     unsigned getDefaultStencilSize() const;
+
+    /*
+    * Map an owned local-storage x-index to its global physical x-index.
+    * Halo indices are deliberately excluded from this mapping.
+    */
+    unsigned localToGlobalX(const unsigned &local_x) const;
 
     /*
      * Use the stencil size to determine how much of the evolution will be performed in the default manner.
@@ -188,7 +252,7 @@ public:
 
     /////////////////////////////  Constructors/Destructors  ////////////////////////////////
 
-    Lattice();
+    Lattice(const int rank = 0, const int num_ranks = 1);
     virtual ~Lattice();
 
     ////////////////////////////////  Public Functions  /////////////////////////////////////

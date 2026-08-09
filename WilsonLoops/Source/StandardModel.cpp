@@ -216,6 +216,11 @@ WilsonLoops::StandardModel::~StandardModel()
 
 /////////////////////////////////////////////  Public Functions  //////////////////////////////////////////
 
+unsigned WilsonLoops::StandardModel::getDefaultStencilSize() const
+{
+    return 1;
+}
+
 bool WilsonLoops::StandardModel::isUsingGeneratorRepresentation() const
 {
     return this->usingGeneratorRepresentation;

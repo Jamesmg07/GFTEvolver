@@ -146,8 +146,6 @@ Fixed::Fixed(std::vector<float> &scalar_fields, std::vector<float> &vector_field
     : BoundaryCondition(scalar_fields, vector_fields, analysers, num_scalar_components, num_vector_components, model, nx, ny, nz, dt, bound_vector)
 {
     this->configure(std::string(SOURCE_DIR) + "/Config/Fixed.cfg", false);
-    std::cout << "BOUNDARYCONDITIONS::FIXED::Warning: This will currently only work when the stencil size is 1.\n"
-              << "Larger stencils are not implemented yet." << std::endl;
 }
 
 Fixed::~Fixed()

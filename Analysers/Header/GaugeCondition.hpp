@@ -28,10 +28,12 @@ private:
     const double &dx, &dy, &dz;
     const long long unsigned gridSize;
     const unsigned &numVectorComponents;
+    int rank, numRanks;
 
     bool globalOptions[numGlobalOptions], localOptions[numLocalOptions], anyLocalOptions, anyGlobalOptions;
     unsigned globalFrequency, localFrequency, counter;
     bool globalOutput, localOutput;
+    long long unsigned ownedSiteBegin, ownedSiteEnd;
 
     std::string globalQuantitiesPath, localQuantitiesPath;
 
@@ -52,12 +54,31 @@ private:
      */
     void initVariables(const long long unsigned &grid_size);
 
+    /*
+    * Add the MPI rank suffix before the filename extension.
+    * For a one-rank run the original path is returned unchanged.
+    */
+    std::string rankLocalPath(const std::string &path, const int file_rank) const;
+
+    /*
+    * Reassemble one local-energy output file from the rank-local pieces.
+    */
+    void mergeRankLocalOutput(const std::string &path, const std::vector<unsigned long long> &owned_site_counts) const;
+
 public:
 
     //////////////////////////////////////////////////  Constructors/Destructors  //////////////////////////////////////////////////////////////
 
-    GaugeCondition(const Model &model, const double &dx, const double &dy, const double &dz, 
-                   const long long unsigned grid_size, const unsigned &num_vector_components);
+    GaugeCondition(const Model &model,
+               const double &dx,
+               const double &dy,
+               const double &dz,
+               const long long unsigned grid_size,
+               const unsigned &num_vector_components,
+               const long long unsigned owned_site_begin,
+               const long long unsigned owned_site_end,
+               const int rank,
+               const int num_ranks);
     virtual ~GaugeCondition();
 
     //////////////////////////////////////////////////////  Public Functions  //////////////////////////////////////////////////////////////////

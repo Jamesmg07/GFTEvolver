@@ -51,7 +51,7 @@ public:
      * 
      * @return       bool                                 Returns true if this class is not responsible for any grid points.
      */
-    bool determineResponsibilities(const unsigned &stencil_size);
+    bool determineResponsibilities(const unsigned &stencil_size, const unsigned &owned_x_begin, const unsigned &owned_x_end);
 
     /*
      * Pure virtual function that must be defined in each child class.

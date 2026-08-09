@@ -131,6 +131,15 @@ public:
      */
     virtual void evolve(float* const local_vector_fields[2], std::vector<double> equation_RHS) = 0;
 
+    /*
+    * Pure virtual function that must be defined in each child class.
+    * Intention is to get the largest spatial distance from the local lattice site required by the wilson loops.
+    * A value of 1 means that only the local site and nearest-neighbour sites are required.
+    *
+    * @return        unsigned                                              The required spatial stencil size.
+    */
+    virtual unsigned getDefaultStencilSize() const = 0;
+
 };
 
 
@@ -178,5 +187,7 @@ public:
     std::vector<double> calcElectricContributions(const float* const local_vector_fields[2]) const;
 
     void evolve(float* const local_vector_fields[2], std::vector<double> equation_RHS);
+
+    unsigned getDefaultStencilSize() const;
 
 };

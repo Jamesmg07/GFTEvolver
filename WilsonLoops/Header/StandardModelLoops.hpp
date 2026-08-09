@@ -189,6 +189,13 @@ namespace WilsonLoops{
         */
         void evolve(float* const local_vector_fields[2], std::vector<double> equation_RHS);
 
+        /*
+        * Returns the largest spatial distance from the local lattice site required by the wilson loops.
+        *
+        * @return        unsigned                                              The required spatial stencil size.
+        */
+        unsigned getDefaultStencilSize() const;
+
     };
 
 }

@@ -9,6 +9,7 @@ set(
   SOURCES
   "${CMAKE_CURRENT_SOURCE_DIR}/Source/BoundaryCondition.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/Source/Periodic.cpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/Source/Interior.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/Source/Fixed.cpp"
 )
 

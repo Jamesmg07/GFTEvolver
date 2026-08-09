@@ -13,6 +13,14 @@ endif()
 
 project(GFTEvolver)
 
+# MPI support is optional so that the original serial build remains available
+# without requiring an MPI installation.
+option(GFT_ENABLE_MPI "Enable MPI parallelisation" OFF)
+
+if (GFT_ENABLE_MPI)
+    find_package(MPI REQUIRED COMPONENTS CXX)
+endif()
+
 # Include path
 set(PROJECT_HEADERS_DIR "${CMAKE_SOURCE_DIR}/Header")
 
@@ -28,6 +36,9 @@ set(PROJECT_HEADERS_DIR "${CMAKE_SOURCE_DIR}/Header")
 #)
 
 add_executable(GFTEvolver main.cpp)
+if (GFT_ENABLE_MPI)
+    target_compile_definitions(GFTEvolver PRIVATE GFT_ENABLE_MPI)
+endif()
 
 if (MSVC)
     target_compile_options(GFTEvolver PRIVATE
@@ -79,3 +90,7 @@ target_link_libraries(GFTEvolver PRIVATE
     InitialConditions
     BoundaryConditions
     Analysers)
+
+if (GFT_ENABLE_MPI)
+    target_link_libraries(GFTEvolver PRIVATE MPI::MPI_CXX)
+endif()

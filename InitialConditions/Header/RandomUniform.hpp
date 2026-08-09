@@ -48,5 +48,5 @@ public:
      * @param        vector<float>& scalarFields                Reference to scalarFields. To be assigned values.
      * @param        vector<float>& vectorFields                Reference to vectorFields. To be assigned values.
      */
-    void setInitialFields(std::vector<float>& field) const;
+    void setInitialFields(std::vector<float>& field, const InitialConditionGeometry& geometry, const unsigned num_components) const override;
 };

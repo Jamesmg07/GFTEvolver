@@ -1,5 +1,19 @@
 #include "Lattice.hpp"
+#include <array>
+#include <limits>
 #include <stdexcept>
+
+#ifdef GFT_ENABLE_MPI
+#include <mpi.h>
+#endif
+
+struct Lattice::HaloExchange
+{
+#ifdef GFT_ENABLE_MPI
+    std::array<MPI_Request, 8> requests;
+#endif
+    int requestCount = 0;
+};
 
 ////////////////////////////////////////////////////////////////////////////////////////////
 //                                   Private                                              //
@@ -28,16 +42,26 @@ void Lattice::initVariables()
     this->stencilSize = 0;
 
     this->progressReport = false;
+
+    this->rank = 0;
+    this->numRanks = 1;
+    this->localNx = 0;
+    this->storageNx = 0;
+    this->globalXStart = 0;
+    this->haloDepth = 0;
+    this->ownedXBegin = 0;
+    this->ownedXEnd = 0;
+    this->leftRank = -1;
+    this->rightRank = -1;
+
+    this->initialConditionTypes.assign(2, 0);
+    this->faceBoundaryConditionTypes.assign(6, 0);
+    this->analysisChoices.assign(3, false);
 }
 
 void Lattice::configure(const std::string path, const bool debug)
 {
     std::ifstream ifs(path);
-
-    // Store choices for debug
-    std::vector<int> initial_condition_types(2, 0);
-    std::vector<int> face_boundary_condition_types(6, 0);
-    std::vector<bool> analysis_choices(3, false);
 
     // Read in the parameter values from the configuration file
     std::string description; // Descriptions in the config file (to be dumped)
@@ -90,47 +114,34 @@ void Lattice::configure(const std::string path, const bool debug)
         /////////  Choose initial conditions types  //////////////
         for (unsigned iter = 0; iter < 3; iter++) std::getline(ifs, description);
         std::getline(ifs, description, ':');
-        ifs >> initial_condition_types[0] >> initial_condition_types[1];
-        this->initInitialCondition(initial_condition_types);
+        ifs >> this->initialConditionTypes[0] >> this->initialConditionTypes[1];
 
 
-        /////////  Choose analyses and assign analysers.  ////////////
+        /////////  Choose analyses.  ////////////
         bool analysis_choice;
 
         // Output fields?
         std::getline(ifs, description);
         std::getline(ifs, description, ':');
         ifs >> analysis_choice;
-        analysis_choices[0] = analysis_choice;
-        if (analysis_choice)
-            this->analysers.push_back( new OutputFields(this->scalarFields, this->numScalarFieldComponents,
-                                                        this->vectorFields, this->numVectorFieldComponents)
-                                     );
+        this->analysisChoices[0] = analysis_choice;
 
         // Output energy?
         std::getline(ifs, description, ':');
         ifs >> analysis_choice;
-        analysis_choices[1] = analysis_choice;
-        if (analysis_choice)
-            this->analysers.push_back( new Energy(this->model, this->dx, this->dy, this->dz, 1ULL*this->nx*this->ny*this->nz) );
+        this->analysisChoices[1] = analysis_choice;
 
         // Output gauge condition violation?
         std::getline(ifs, description, ':');
         ifs >> analysis_choice;
-        analysis_choices[2] = analysis_choice;
-        if (analysis_choice)
-            this->analysers.push_back( new GaugeCondition(this->model, this->dx, this->dy, this->dz, 
-                                                          1ULL*this->nx*this->ny*this->nz, this->numVectorFieldComponents) );
-
+        this->analysisChoices[2] = analysis_choice;
 
         // Choose boundary condition types. Only the six faces are assigned by
         // the user; edge and corner behaviour is inferred automatically.
         for (unsigned iter = 0; iter < 7; iter++) std::getline(ifs, description);
         std::getline(ifs, description, ':');
-        for (unsigned iter = 0; iter < 6; iter++) ifs >> face_boundary_condition_types[iter];
-
-        // Instantiate boundary conditions
-        this->initBoundaryCondition(face_boundary_condition_types);
+        for (unsigned iter = 0; iter < 6; iter++)
+            ifs >> this->faceBoundaryConditionTypes[iter];
 
 
         // Choose whether to output progress throughout the simulation.
@@ -153,19 +164,134 @@ void Lattice::configure(const std::string path, const bool debug)
                   << "dx: " << this->dx << ", dy: " << this->dy << ", dz: " << this->dz << ", dt: " << this->dt << "\n"
                   << "#Scalar field components: " << numScalarFieldComponents
                   << ", #Vector field components: " << numVectorFieldComponents << "\n"
-                  << "Scalar initial condition type: " << initial_condition_types[0]
-                  << ", Vector initial condition type: " << initial_condition_types[1] << "\n"
+                  << "Scalar initial condition type: " << initialConditionTypes[0]
+                  << ", Vector initial condition type: " << initialConditionTypes[1] << "\n"
                   << "Face boundary condition types:";
 
         for (unsigned iter = 0; iter < 6; iter++)
-            std::cout << " " << face_boundary_condition_types[iter];
+            std::cout << " " << faceBoundaryConditionTypes[iter];
 
-        std::cout << "\nOutput fields?: " << analysis_choices[0]
-                  << "\nOutput energy?: " << analysis_choices[1]
-                  << "\nOutput gauge condition violation?: " << analysis_choices[2]
+        std::cout << "\nOutput fields?: " << analysisChoices[0]
+                  << "\nOutput energy?: " << analysisChoices[1]
+                  << "\nOutput gauge condition violation?: " << analysisChoices[2]
                   << std::endl;
 
         std::cout << "Report progress?: " << this->progressReport << ", every " << this->reportFrequency << " timesteps.\n" << std::endl;
+    }
+}
+
+void Lattice::initAnalysers(const std::vector<bool> &analysis_choices)
+{
+    if (analysis_choices.size() != 3)
+        throw std::runtime_error(
+            "LATTICE:: Exactly three analyser choices must be assigned."
+        );
+
+    if (analysis_choices[0])
+        this->analysers.push_back(
+            new OutputFields(
+                this->scalarFields,
+                this->numScalarFieldComponents,
+                this->vectorFields,
+                this->numVectorFieldComponents,
+                1ULL*this->storageNx*this->ny*this->nz,
+                1ULL*this->ownedXBegin*this->ny*this->nz,
+                1ULL*this->ownedXEnd*this->ny*this->nz,
+                this->rank,
+                this->numRanks)
+        );
+
+    if (analysis_choices[1])
+        this->analysers.push_back(
+            new Energy(
+            this->model,
+            this->dx,
+            this->dy,
+            this->dz,
+            1ULL*this->storageNx*this->ny*this->nz,
+            1ULL*this->ownedXBegin*this->ny*this->nz,
+            1ULL*this->ownedXEnd*this->ny*this->nz,
+            this->rank,
+            this->numRanks)
+        );
+
+    if (analysis_choices[2])
+        this->analysers.push_back(
+            new GaugeCondition(
+            this->model,
+            this->dx,
+            this->dy,
+            this->dz,
+            1ULL*this->storageNx*this->ny*this->nz,
+            this->numVectorFieldComponents,
+            1ULL*this->ownedXBegin*this->ny*this->nz,
+            1ULL*this->ownedXEnd*this->ny*this->nz,
+            this->rank,
+            this->numRanks)
+        );
+}
+
+void Lattice::initSlabGeometry()
+{
+    const unsigned process_count = static_cast<unsigned>(this->numRanks);
+    const unsigned process_rank = static_cast<unsigned>(this->rank);
+
+    // Divide nx as evenly as possible. The first remainder ranks receive
+    // one additional physical x-plane.
+    const unsigned base_planes = this->nx/process_count;
+    const unsigned remainder = this->nx%process_count;
+
+    this->localNx = base_planes + (process_rank < remainder ? 1U : 0U);
+    this->globalXStart = process_rank*base_planes
+                       + (process_rank < remainder ? process_rank : remainder);
+
+    // Preserve the original serial storage layout exactly. For more than one
+    // rank, reserve enough x-width for the complete operator footprint.
+    this->haloDepth = (this->numRanks > 1) ? this->stencilSize : 0U;
+
+    if (this->localNx < 2U*this->haloDepth)
+    {
+        throw std::runtime_error(
+            "LATTICE:: MPI x-slab is too narrow for the required stencil."
+        );
+    }
+
+    this->storageNx = this->localNx + 2U*this->haloDepth;
+    this->ownedXBegin = this->haloDepth;
+    this->ownedXEnd = this->ownedXBegin + this->localNx;
+
+    // Direct process neighbours always exist between adjacent slabs. At the
+    // two global x-ends they exist only when x is globally periodic.
+    this->leftRank = -1;
+    this->rightRank = -1;
+
+    if (this->numRanks > 1)
+    {
+        const bool periodic_x =
+            this->faceBoundaryConditionTypes[0] == PERIODIC &&
+            this->faceBoundaryConditionTypes[1] == PERIODIC;
+
+        if (this->rank > 0)
+            this->leftRank = this->rank - 1;
+        else if (periodic_x)
+            this->leftRank = this->numRanks - 1;
+
+        if (this->rank < this->numRanks - 1)
+            this->rightRank = this->rank + 1;
+        else if (periodic_x)
+            this->rightRank = 0;
+    }
+
+    // Local consistency checks 
+    if (this->globalXStart + this->localNx > this->nx)
+        throw std::runtime_error("LATTICE:: Invalid MPI x-slab decomposition.");
+
+    if (this->localNx > 0 &&
+        (this->localToGlobalX(this->ownedXBegin) != this->globalXStart ||
+         this->localToGlobalX(this->ownedXEnd - 1) !=
+             this->globalXStart + this->localNx - 1))
+    {
+        throw std::runtime_error("LATTICE:: Invalid local-to-global x mapping.");
     }
 }
 
@@ -227,9 +353,18 @@ void Lattice::initBoundaryCondition(const std::vector<int> &face_boundary_condit
 
     // Automatic inference currently supports the two boundary conditions that
     // are fully implemented in V1. Neumann will be enabled separately once a
-    // gauge-covariant implementation exists.
+    // gauge-covariant implementation exists. Backend Interior MPI boundary should never be specified.
+    bool has_fixed_boundary = false;
     for (unsigned face_iter = 0; face_iter < 6; face_iter++)
     {
+        if (face_boundary_condition_types[face_iter] == INTERIOR)
+        {
+            throw std::runtime_error(
+                "LATTICE:: INTERIOR is an implementation-only boundary type "
+                "and cannot be assigned in Lattice.cfg."
+            );
+        }
+
         if (face_boundary_condition_types[face_iter] != FIXED &&
             face_boundary_condition_types[face_iter] != PERIODIC)
         {
@@ -240,6 +375,9 @@ void Lattice::initBoundaryCondition(const std::vector<int> &face_boundary_condit
                 std::to_string(face_boundary_condition_types[face_iter]) + "."
             );
         }
+
+        if (face_boundary_condition_types[face_iter] == FIXED)
+            has_fixed_boundary = true;
     }
 
     // Periodicity is a property of a complete coordinate direction, so a
@@ -257,6 +395,29 @@ void Lattice::initBoundaryCondition(const std::vector<int> &face_boundary_condit
                 "LATTICE:: Periodic boundary conditions must be assigned "
                 "to both faces of an axis."
             );
+    }
+
+    if (has_fixed_boundary && this->rank == 0)
+    {
+        std::cout
+            << "BOUNDARYCONDITIONS::FIXED::Warning: "
+            << "This will currently only work when the stencil size is 1.\n"
+            << "Larger stencils are not implemented yet.\n"
+            << std::endl;
+    }
+
+    // Convert the six global physical face assignments into the six faces seen
+    // by this rank. A process neighbour replaces the corresponding local x-face
+    // with an internal interface. 
+    std::vector<int> local_face_boundary_condition_types = face_boundary_condition_types;
+
+    if (this->numRanks > 1)
+    {
+        if (this->leftRank >= 0)
+            local_face_boundary_condition_types[0] = INTERIOR;
+
+        if (this->rightRank >= 0)
+            local_face_boundary_condition_types[1] = INTERIOR;
     }
 
     for (unsigned which_boundary = 0; which_boundary < 26; which_boundary++)
@@ -289,10 +450,11 @@ void Lattice::initBoundaryCondition(const std::vector<int> &face_boundary_condit
         }
 
 
-        // Work out which of the six user-assigned faces meet at this region.
-        // With the current Fixed/Periodic pair, a fixed face freezes the whole
-        // region. Otherwise every incident face is periodic and the region is
-        // periodic.
+        // Work out which rank-local faces meet at this region. Physical fixed
+        // support takes priority over an MPI interface, which in turn takes
+        // priority over periodic treatment:
+        //
+        //     FIXED > INTERIOR > PERIODIC.
         int boundary_condition_type = PERIODIC;
 
         for (unsigned axis = 0; axis < 3; axis++)
@@ -303,11 +465,17 @@ void Lattice::initBoundaryCondition(const std::vector<int> &face_boundary_condit
             const unsigned face_index =
                 2*axis + (bound_vector[axis] > 0 ? 1 : 0);
 
-            if (face_boundary_condition_types[face_index] == FIXED)
+            const int face_type =
+                local_face_boundary_condition_types[face_index];
+
+            if (face_type == FIXED)
             {
                 boundary_condition_type = FIXED;
                 break;
             }
+
+            if (face_type == INTERIOR)
+                boundary_condition_type = INTERIOR;
         }
 
 
@@ -326,7 +494,7 @@ void Lattice::initBoundaryCondition(const std::vector<int> &face_boundary_condit
 
             this->boundaryConditions.push_back( new Fixed(this->scalarFields, this->vectorFields, this->analysers,
                                                           this->numScalarFieldComponents, this->numVectorFieldComponents,
-                                                          this->model, this->nx, this->ny, this->nz, this->dt,
+                                                          this->model, this->storageNx, this->ny, this->nz, this->dt,
                                                           bound_vector)
                                               );
             break;
@@ -341,9 +509,27 @@ void Lattice::initBoundaryCondition(const std::vector<int> &face_boundary_condit
 
             this->boundaryConditions.push_back( new Periodic(this->scalarFields, this->vectorFields, this->analysers,
                                                              this->numScalarFieldComponents, this->numVectorFieldComponents,
-                                                             this->model, this->nx, this->ny, this->nz, this->dt,
+                                                             this->model, this->storageNx, this->ny, this->nz, this->dt,
                                                              bound_vector)
                                               );
+            break;
+
+        case INTERIOR:
+
+            this->boundaryConditions.push_back(
+                new Interior(
+                    this->scalarFields,
+                    this->vectorFields,
+                    this->analysers,
+                    this->numScalarFieldComponents,
+                    this->numVectorFieldComponents,
+                    this->model,
+                    this->storageNx,
+                    this->ny,
+                    this->nz,
+                    this->dt,
+                    bound_vector)
+            );
             break;
 
         default:
@@ -359,11 +545,11 @@ void Lattice::initFields()
 {
     // (long long int) 2 both converts the whole expression to long long int 
     // and allows two timesteps to be stored.
-    long long unsigned scalar_array_size = 2ULL*this->nx*this->ny*this->nz*this->numScalarFieldComponents;
+    long long unsigned scalar_array_size = 2ULL*this->storageNx*this->ny*this->nz*this->numScalarFieldComponents;
     this->scalarFields.resize(scalar_array_size, 0.f);
 
     // Same as above (numVectorFieldComponents contains 3*the amount requested to account for spatial components of each)
-    long long unsigned vector_array_size = 2ULL*this->nx*this->ny*this->nz*this->numVectorFieldComponents;
+    long long unsigned vector_array_size = 2ULL*this->storageNx*this->ny*this->nz*this->numVectorFieldComponents;
     this->vectorFields.resize(vector_array_size, 0.f);
 
     // A zero gauge field is stored as the SU(2) identity in quaternion form.
@@ -373,7 +559,7 @@ void Lattice::initFields()
             = this->numVectorFieldComponents/3U;
 
         for (long long unsigned loc_iter = 0;
-            loc_iter < 2ULL*this->nx*this->ny*this->nz;
+            loc_iter < 2ULL*this->storageNx*this->ny*this->nz;
             loc_iter++)
         {
             for (unsigned dir_iter = 0; dir_iter < 3U; dir_iter++)
@@ -394,11 +580,36 @@ void Lattice::initFields()
         }
     }
 
-    // Generate the initial conditions
-    if(scalarInitialConditions)
-        scalarInitialConditions->setInitialFields(scalarFields);
-    if(vectorInitialConditions)
-        vectorInitialConditions->setInitialFields(vectorFields);
+    // Initial conditions are evaluated only on physical sites owned by this
+    // rank. Halo cells retain their representation-safe defaults until the
+    // initial halo exchange.
+    const InitialConditionGeometry ic_geometry{
+        this->nx,
+        this->ny,
+        this->nz,
+        this->localNx,
+        this->storageNx,
+        this->globalXStart,
+        this->ownedXBegin,
+        this->ownedXEnd,
+        this->dx,
+        this->dy,
+        this->dz,
+        this->dt
+    };
+
+    if (scalarInitialConditions)
+        scalarInitialConditions->setInitialFields(
+            scalarFields,
+            ic_geometry,
+            this->numScalarFieldComponents);
+
+    if (vectorInitialConditions)
+        vectorInitialConditions->setInitialFields(
+            vectorFields,
+            ic_geometry,
+            this->numVectorFieldComponents);
+
 
     if (this->progressReport)
     {
@@ -408,21 +619,244 @@ void Lattice::initFields()
 
 ////////////////////////////////////////////////  Private Functions  /////////////////////////////////////////////////////
 
+void Lattice::beginHaloExchange(
+    const unsigned &t_step,
+    HaloExchange &exchange)
+{
+    if (t_step > 1U)
+        throw std::runtime_error(
+            "LATTICE:: Invalid time-buffer index for halo exchange."
+        );
+
+    if (exchange.requestCount != 0)
+        throw std::runtime_error(
+            "LATTICE:: Halo exchange is already in progress."
+        );
+
+    if (this->numRanks == 1 || this->haloDepth == 0U)
+        return;
+
+#ifndef GFT_ENABLE_MPI
+
+    throw std::runtime_error(
+        "LATTICE:: Multi-rank halo exchange requires an MPI build."
+    );
+
+#else
+
+    const int left_peer
+        = (this->leftRank >= 0)
+        ? this->leftRank
+        : MPI_PROC_NULL;
+
+    const int right_peer
+        = (this->rightRank >= 0)
+        ? this->rightRank
+        : MPI_PROC_NULL;
+
+    auto post_field =
+        [this, t_step, left_peer, right_peer, &exchange](
+            std::vector<float> &field,
+            const unsigned num_components,
+            const int left_tag,
+            const int right_tag)
+    {
+        if (num_components == 0U)
+            return;
+
+        const unsigned long long plane_width
+            = 1ULL*this->ny*this->nz*num_components;
+
+        const unsigned long long exchange_size
+            = 1ULL*this->haloDepth*plane_width;
+
+        if (exchange_size >
+            static_cast<unsigned long long>(
+                std::numeric_limits<int>::max()))
+        {
+            throw std::runtime_error(
+                "LATTICE:: MPI halo message exceeds "
+                "the supported MPI count range."
+            );
+        }
+
+        const int exchange_count
+            = static_cast<int>(exchange_size);
+
+        const unsigned long long time_offset
+            = 1ULL*t_step*this->storageNx*plane_width;
+
+        const unsigned long long left_halo_offset
+            = time_offset
+            + 1ULL*(this->ownedXBegin - this->haloDepth)
+              *plane_width;
+
+        const unsigned long long left_owned_offset
+            = time_offset
+            + 1ULL*this->ownedXBegin*plane_width;
+
+        const unsigned long long right_owned_offset
+            = time_offset
+            + 1ULL*(this->ownedXEnd - this->haloDepth)
+              *plane_width;
+
+        const unsigned long long right_halo_offset
+            = time_offset
+            + 1ULL*this->ownedXEnd*plane_width;
+
+
+        // Post the two receives first.
+        int mpi_error = MPI_Irecv(
+            field.data() + right_halo_offset,
+            exchange_count,
+            MPI_FLOAT,
+            right_peer,
+            left_tag,
+            MPI_COMM_WORLD,
+            &exchange.requests[exchange.requestCount]);
+
+        if (mpi_error != MPI_SUCCESS)
+            throw std::runtime_error(
+                "LATTICE:: Failed to post MPI halo receive."
+            );
+
+        exchange.requestCount++;
+
+
+        mpi_error = MPI_Irecv(
+            field.data() + left_halo_offset,
+            exchange_count,
+            MPI_FLOAT,
+            left_peer,
+            right_tag,
+            MPI_COMM_WORLD,
+            &exchange.requests[exchange.requestCount]);
+
+        if (mpi_error != MPI_SUCCESS)
+            throw std::runtime_error(
+                "LATTICE:: Failed to post MPI halo receive."
+            );
+
+        exchange.requestCount++;
+
+
+        // Now post the two sends.
+        mpi_error = MPI_Isend(
+            field.data() + left_owned_offset,
+            exchange_count,
+            MPI_FLOAT,
+            left_peer,
+            left_tag,
+            MPI_COMM_WORLD,
+            &exchange.requests[exchange.requestCount]);
+
+        if (mpi_error != MPI_SUCCESS)
+            throw std::runtime_error(
+                "LATTICE:: Failed to post MPI halo send."
+            );
+
+        exchange.requestCount++;
+
+
+        mpi_error = MPI_Isend(
+            field.data() + right_owned_offset,
+            exchange_count,
+            MPI_FLOAT,
+            right_peer,
+            right_tag,
+            MPI_COMM_WORLD,
+            &exchange.requests[exchange.requestCount]);
+
+        if (mpi_error != MPI_SUCCESS)
+            throw std::runtime_error(
+                "LATTICE:: Failed to post MPI halo send."
+            );
+
+        exchange.requestCount++;
+    };
+
+
+    post_field(
+        this->scalarFields,
+        this->numScalarFieldComponents,
+        100,
+        101);
+
+    post_field(
+        this->vectorFields,
+        this->numVectorFieldComponents,
+        102,
+        103);
+
+#endif
+}
+
+void Lattice::finishHaloExchange(HaloExchange &exchange)
+{
+    if (exchange.requestCount == 0)
+        return;
+
+#ifndef GFT_ENABLE_MPI
+
+    throw std::runtime_error(
+        "LATTICE:: Multi-rank halo exchange requires an MPI build."
+    );
+
+#else
+
+    const int mpi_error = MPI_Waitall(
+        exchange.requestCount,
+        exchange.requests.data(),
+        MPI_STATUSES_IGNORE);
+
+    if (mpi_error != MPI_SUCCESS)
+        throw std::runtime_error(
+            "LATTICE:: MPI halo exchange failed while waiting for completion."
+        );
+
+    exchange.requestCount = 0;
+
+#endif
+}
+
+void Lattice::exchangeHalos(const unsigned &t_step)
+{
+    HaloExchange exchange;
+
+    this->beginHaloExchange(t_step, exchange);
+    this->finishHaloExchange(exchange);
+}
+
 unsigned Lattice::getDefaultStencilSize() const
 {
     return this->model.getDefaultStencilSize();
-    // May need modification to also check other stencils later on, e.g from wilson loops.
+
+}
+
+unsigned Lattice::localToGlobalX(const unsigned &local_x) const
+{
+    // Deliberatley exclude halo positions
+    if (local_x < this->ownedXBegin || local_x >= this->ownedXEnd)
+        throw std::runtime_error(
+            "LATTICE:: Local-to-global x mapping requested for a non site."
+        );
+
+    return this->globalXStart + (local_x - this->ownedXBegin);
 }
 
 std::vector< std::vector<unsigned> > Lattice::determineResponsibilities(const unsigned &stencil_size) const
 {
     std::vector< std::vector<unsigned> > loop_limits(3, std::vector<unsigned>(2, stencil_size));
 
-    // Deal with edge cases.
-    if (this->nx < stencil_size)
-        loop_limits[0][1] = 0;
+    // The x loop operates only on physical sites owned by this rank.
+    // Halo planes are support data and must never acquire evolution
+    // responsibility.
+    loop_limits[0][0] = this->ownedXBegin + stencil_size;
+
+    if (this->localNx < stencil_size)
+        loop_limits[0][1] = this->ownedXBegin;
     else
-        loop_limits[0][1] = this->nx - stencil_size;
+        loop_limits[0][1] = this->ownedXEnd - stencil_size;
 
     if (this->ny < stencil_size)
         loop_limits[1][1] = 0;
@@ -457,7 +891,7 @@ void Lattice::postEvolveAnalysis(
         3,
         std::vector<long long unsigned>(
             2*this->stencilSize + 1,
-            t_now*this->nx*this->ny*this->nz
+            t_now*this->storageNx*this->ny*this->nz
         )
     );
 
@@ -655,17 +1089,29 @@ std::vector<std::vector<const float *>> Lattice::generateVectorPointers(const st
 }
 
 
-float *Lattice::getScalarFieldPointer(const unsigned &t_step, const unsigned &x_loc, const unsigned &y_loc, const unsigned &z_loc)
+float *Lattice::getScalarFieldPointer(
+    const unsigned &t_step,
+    const unsigned &x_loc,
+    const unsigned &y_loc,
+    const unsigned &z_loc)
 {
-    long long unsigned array_location = ( ( (t_step*this->nx + x_loc)*this->ny + y_loc )*this->nz + z_loc)*this->numScalarFieldComponents;
+    long long unsigned array_location =
+        (((t_step*this->storageNx + x_loc)*this->ny + y_loc)
+         *this->nz + z_loc)*this->numScalarFieldComponents;
 
     return &this->scalarFields[array_location];
 }
 
 
-float *Lattice::getVectorFieldPointer(const unsigned &t_step, const unsigned &x_loc, const unsigned &y_loc, const unsigned &z_loc)
+float *Lattice::getVectorFieldPointer(
+    const unsigned &t_step,
+    const unsigned &x_loc,
+    const unsigned &y_loc,
+    const unsigned &z_loc)
 {
-    long long unsigned array_location = ( ( (t_step*this->nx + x_loc)*this->ny + y_loc )*this->nz + z_loc)*this->numVectorFieldComponents;
+    long long unsigned array_location =
+        (((t_step*this->storageNx + x_loc)*this->ny + y_loc)
+         *this->nz + z_loc)*this->numVectorFieldComponents;
 
     return &this->vectorFields[array_location];
 }
@@ -676,38 +1122,50 @@ float *Lattice::getVectorFieldPointer(const unsigned &t_step, const unsigned &x_
 
 ////////////////////////////////////////////  Constructors/Destructors  //////////////////////////////////////////////////
 
-Lattice::Lattice()
+Lattice::Lattice(const int rank, const int num_ranks)
 {
-    // Initialise all variables to placeholder/default values
     this->initVariables();
 
-    // Configure the lattice.
+    if (num_ranks < 1 || rank < 0 || rank >= num_ranks)
+        throw std::runtime_error("LATTICE:: Invalid MPI rank information.");
+
+    this->rank = rank;
+    this->numRanks = num_ranks;
+
     this->configure(std::string(SOURCE_DIR) + "/Config/Lattice.cfg", true);
-    std::cout << "Lattice configure done" << std::endl;
-    
-    // Configure the model (potential, gradients and wilson loops).
+
     this->model.configure(
-        std::string(SOURCE_DIR) + "/Config/Model.cfg", 
+        std::string(SOURCE_DIR) + "/Config/Model.cfg",
         this->numScalarFieldComponents, this->numVectorFieldComponents,
         this->nx, this->ny, this->nz,
-        this->dx, this->dy, this->dz, 
+        this->dx, this->dy, this->dz,
         this->dt, true
     );
 
-    // Initialise the fields that live on the lattice.
-    this->initFields();
-    std::cout << "Lattice initFields done" << std::endl;
-
-    // Determine the largest default stencil size
+    // Determine the complete operator footprint before any later
+    // geometry-dependent objects are instantiated.
     this->stencilSize = this->getDefaultStencilSize();
 
-    // PERHAPS REPLACE WITH LATTICE VERSION OF DETERMINERESPONSIBILITIES AND THIS LOOP CAN BE WITHIN THAT FUNCTION...
+    // Determine this rank's physical ownership and the storage geometry
+    this->initSlabGeometry();
+
+    // Instantiate the choices stored while reading Lattice.cfg only after
+    // the model and current lattice geometry are known.
+    this->initInitialCondition(this->initialConditionTypes);
+    this->initAnalysers(this->analysisChoices);
+    this->initBoundaryCondition(this->faceBoundaryConditionTypes);
+
+    this->initFields();
+    // Both stored initial time levels must have valid neighbour support before
+    // any stencil-based operation is allowed to inspect them.
+    this->exchangeHalos(0U);
+    this->exchangeHalos(1U);
 
     // Determine the responsibilities of the boundary conditions.
     // Also check for boundaries with no responsibilities (common in 1/2D sims for example) and remove them.
     for (auto it = this->boundaryConditions.begin(); it != this->boundaryConditions.end(); )
     {
-        bool is_empty = (*it)->determineResponsibilities(this->stencilSize);
+        bool is_empty = (*it)->determineResponsibilities(this->stencilSize, this->ownedXBegin, this->ownedXEnd);
         if (is_empty)
         {
             delete *it;
@@ -756,15 +1214,28 @@ void Lattice::evolve()
 {
     // Get start time of evolution stage if reporting progress.
     std::chrono::steady_clock::time_point start_time;
-    if (this->progressReport) 
-        start_time = std::chrono::steady_clock::now();
+    if (this->progressReport)
+    {
+        #ifdef GFT_ENABLE_MPI
+        if (this->numRanks > 1 &&
+            MPI_Barrier(MPI_COMM_WORLD) != MPI_SUCCESS)
+        {
+            throw std::runtime_error(
+                "LATTICE:: MPI barrier failed before evolution timing."
+            );
+        }
+        #endif
+
+        if (this->rank == 0)
+            start_time = std::chrono::steady_clock::now();
+    }
 
 
     // Determine how much of the grid is interior and can be evolved in the default manner
     // and how many the boundary condition classes will be responsible for evolving.
     std::vector< std::vector<unsigned> > loop_limits = this->determineResponsibilities(this->stencilSize);
 
-    if (this->progressReport)   
+    if (this->progressReport && this->rank == 0)   
         std::cout << "Beginning evolution." << std::endl;
 
     for (unsigned time_iter = 0; time_iter < this->nt; time_iter++)
@@ -776,16 +1247,21 @@ void Lattice::evolve()
         // Update model internal evolution parameters that depend upon the timestep
         model.update(time_iter);
 
-        //MPI: send here without blocking, move boundary evolution to later and recv just before.
-
-         // Evolve grid points that are near/on boundaries
+        // Evolve grid points that are near/on boundaries. Once this is
+        // complete, the new outgoing x-interface strips in t_past are ready.
         for (auto bound : this->boundaryConditions)
             bound->evolve(t_now, this->stencilSize);
+
+        // Start communicating those new interface strips now. The central
+        // volume below is independent of the incoming t_past halos, so its
+        // evolution can overlap the MPI transfer.
+        HaloExchange halo_exchange;
+        this->beginHaloExchange(t_past, halo_exchange);
 
         // Save computation by calculating the indices at lowest loop levels possible.
         std::vector< std::vector<long long unsigned> > t_running_indices(
             3, std::vector<long long unsigned>(
-                2*this->stencilSize + 1, t_now*this->nx*this->ny*this->nz
+                2*this->stencilSize + 1, t_now*this->storageNx*this->ny*this->nz
             )
         ); 
         
@@ -843,6 +1319,11 @@ void Lattice::evolve()
             }
         }
 
+        // The full owned t_past state is now evolved. The new neighbour
+        // halos must be complete before post-evolution analysis or the next
+        // timestep is allowed to read them.
+        this->finishHaloExchange(halo_exchange);
+
         // Run post-evolution location analyses only after the new
         // timestep is complete across the full dynamic grid.
         this->postEvolveAnalysis(t_now, loop_limits);
@@ -852,25 +1333,49 @@ void Lattice::evolve()
             analyser->timestepAnalysis(time_iter);
 
         // Replace with a function that has some more nice features.
-        if (this->progressReport
+        if (this->progressReport && this->rank == 0
             && (time_iter + 1)%this->reportFrequency == 0)
         {
             std::cout
                 << "Timestep "
                 << std::to_string(time_iter + 1)
                 << " completed.\r"
-                << std::flush;
+                << std::endl;
         }
 
     }
 
     if (this->progressReport)
     {
-        std::cout << "Timestep " << std::to_string(this->nt) << " completed.\n";
+        #ifdef GFT_ENABLE_MPI
+        if (this->numRanks > 1 &&
+            MPI_Barrier(MPI_COMM_WORLD) != MPI_SUCCESS)
+        {
+            throw std::runtime_error(
+                "LATTICE:: MPI barrier failed after evolution."
+            );
+        }
+        #endif
 
-        std::chrono::steady_clock::time_point end_time = std::chrono::steady_clock::now();
-        std::chrono::duration<double> elapsed_time = end_time - start_time;
-        std::cout << "Evolution finished in " << elapsed_time.count() << " seconds."  << std::endl;
+        if (this->rank == 0)
+        {
+            std::chrono::steady_clock::time_point end_time
+                = std::chrono::steady_clock::now();
+
+            std::chrono::duration<double> elapsed_time
+                = end_time - start_time;
+
+            std::cout
+                << "Timestep "
+                << std::to_string(this->nt)
+                << " completed.\n";
+
+            std::cout
+                << "Evolution finished in "
+                << elapsed_time.count()
+                << " seconds."
+                << std::endl;
+        }
     }
 
 }

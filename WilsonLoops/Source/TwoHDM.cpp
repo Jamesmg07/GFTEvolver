@@ -87,10 +87,14 @@ void WilsonLoops::TwoHDM::initVariables()
 
 /////////////////////////////////////////////  Private Functions  //////////////////////////////////////////
 
-std::vector<double> WilsonLoops::TwoHDM::getSU2Representation(const float *const vector_pointer, const long long int dir_index, const unsigned offset,
-                                                              const bool conjugate) const
+WilsonLoops::TwoHDM::SU2Representation
+WilsonLoops::TwoHDM::getSU2Representation(
+    const float *const vector_pointer,
+    const long long int dir_index,
+    const unsigned offset,
+    const bool conjugate) const
 {
-    std::vector<double> c_representation(4, 0.f);
+    SU2Representation c_representation{};
 
     int conj_fac = 1;
     if (conjugate)
@@ -126,7 +130,7 @@ std::vector<double> WilsonLoops::TwoHDM::getSU2Representation(const float *const
 }
 
 
-std::vector<float> WilsonLoops::TwoHDM::invertSU2Representation(const std::vector<double> c_representation) const
+std::vector<float> WilsonLoops::TwoHDM::invertSU2Representation(const WilsonLoops::TwoHDM::SU2Representation &c_representation) const
 {
     std::vector<float> w_representation(3, 0.f);
 
@@ -171,9 +175,13 @@ std::vector<float> WilsonLoops::TwoHDM::invertSU2Representation(const std::vecto
 }
 
 
-std::vector<double> WilsonLoops::TwoHDM::SU2Product(const std::vector<double> U1, const std::vector<double> U2, bool calc_trace) const
+WilsonLoops::TwoHDM::SU2Representation
+WilsonLoops::TwoHDM::SU2Product(
+    const WilsonLoops::TwoHDM::SU2Representation &U1,
+    const WilsonLoops::TwoHDM::SU2Representation &U2,
+    const bool calc_trace) const
 {
-    std::vector<double> U_product(4, 0.f);
+    SU2Representation U_product{};
 
     // Remaining three are given by c^0_1c^a_2 + c^a_1c^0_2 - epsilon^{abc}c^b_1c^c_2
     U_product[1] = U1[0]*U2[1] + U1[1]*U2[0] - U1[2]*U2[3] + U1[3]*U2[2];
@@ -250,6 +258,11 @@ WilsonLoops::TwoHDM::~TwoHDM()
 }
 
 /////////////////////////////////////////////  Public Functions  //////////////////////////////////////////
+
+unsigned WilsonLoops::TwoHDM::getDefaultStencilSize() const
+{
+    return 1;
+}
 
 bool WilsonLoops::TwoHDM::isUsingGeneratorRepresentation() const
 {
@@ -338,16 +351,16 @@ std::vector<float> WilsonLoops::TwoHDM::calcConstraintContributions(const long l
 
         // Calculate the contribution from the first Wilson loop:
         // Representation of right-hand matrix
-        std::vector<double> U_product1 = this->getSU2Representation(vector_pointers[0][1], future_index, 1U, false);
+        SU2Representation U_product1 = this->getSU2Representation(vector_pointers[0][1], future_index, 1U, false);
 
         // Representation of the left-hand matrix
-        std::vector<double> U_multiply = this->getSU2Representation(vector_pointers[0][1], dir_index, 1U, true);
+        SU2Representation U_multiply = this->getSU2Representation(vector_pointers[0][1], dir_index, 1U, true);
 
         U_product1 = this->SU2Product(U_multiply, U_product1, false);
 
 
         // Repeat for the second Wilson loop:
-        std::vector<double> U_product2 = this->getSU2Representation(vector_pointers[dir_iter][0], dir_index, 1U, true);
+        SU2Representation U_product2 = this->getSU2Representation(vector_pointers[dir_iter][0], dir_index, 1U, true);
         U_multiply = this->getSU2Representation(vector_pointers[dir_iter][0], future_index, 1U, false);
 
         U_product2 = this->SU2Product(U_multiply, U_product2, false);
@@ -443,10 +456,10 @@ std::vector<double> WilsonLoops::TwoHDM::calcMagneticContributions(const std::ve
 
                 // Calculate the contribution from the first Wilson loop:
                 // Representation of right-hand matrix
-                std::vector<double> U_product1 = this->getSU2Representation(vector_pointers[dir2_iter][1], dir1_index, 1U, true);
+                SU2Representation U_product1 = this->getSU2Representation(vector_pointers[dir2_iter][1], dir1_index, 1U, true);
 
                 // Representation of the left-hand matrix
-                std::vector<double> U_multiply = this->getSU2Representation(vector_pointers[dir1_iter][1], dir2_index, 1U, false);
+                SU2Representation U_multiply = this->getSU2Representation(vector_pointers[dir1_iter][1], dir2_index, 1U, false);
 
                 // Multiply them together
                 U_product1 = this->SU2Product(U_multiply, U_product1, true);
@@ -463,7 +476,7 @@ std::vector<double> WilsonLoops::TwoHDM::calcMagneticContributions(const std::ve
 
 
                 // Now repeat for the second Wilson loop:
-                std::vector<double> U_product2 = this->getSU2Representation(vector_pointers[dir1_iter][diag_index], dir2_index, 1U, true);
+                SU2Representation U_product2 = this->getSU2Representation(vector_pointers[dir1_iter][diag_index], dir2_index, 1U, true);
                 U_multiply = this->getSU2Representation(vector_pointers[dir2_iter][0], dir1_index, 1U, true);
                 U_product2 = this->SU2Product(U_multiply, U_product2, true);
 
@@ -581,8 +594,8 @@ std::vector<double> WilsonLoops::TwoHDM::calcElectricContributions(const float *
         /////////////////////////  Isospin SU(2) calculations:  ///////////////////////////////////////
 
 
-        std::vector<double> U_product = this->getSU2Representation(local_vector_fields[0], dir_index, 1U, true);
-        std::vector<double> U_multiply = this->getSU2Representation(local_vector_fields[1], dir_index, 1U, false);
+        SU2Representation U_product = this->getSU2Representation(local_vector_fields[0], dir_index, 1U, true);
+        SU2Representation U_multiply = this->getSU2Representation(local_vector_fields[1], dir_index, 1U, false);
 
         U_product = this->SU2Product(U_multiply, U_product, this->storeEnergy);
 
@@ -680,8 +693,8 @@ void WilsonLoops::TwoHDM::evolve(float *const local_vector_fields[2], std::vecto
         if (c_mag_sqr > 1)
             std::cout << "Panic in evolve (c_mag_sqr = " << c_mag_sqr << " )" << std::endl;
 
-        std::vector<double> u_multiply = {std::sqrt(1.0 - c_mag_sqr), equation_RHS[eq_dir_index + 1], equation_RHS[eq_dir_index + 2], equation_RHS[eq_dir_index + 3]};
-        std::vector<double> U_product = this->getSU2Representation(local_vector_fields[1], dir_index, 1U, false);
+        SU2Representation u_multiply = {std::sqrt(1.0 - c_mag_sqr), equation_RHS[eq_dir_index + 1], equation_RHS[eq_dir_index + 2], equation_RHS[eq_dir_index + 3]};
+        SU2Representation U_product = this->getSU2Representation(local_vector_fields[1], dir_index, 1U, false);
 
         // Get the SU(2) matrix uU(t) in c_i^\mu form.
         U_product = this->SU2Product(u_multiply, U_product, true);

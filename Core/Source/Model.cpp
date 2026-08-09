@@ -256,7 +256,11 @@ void Model::update(unsigned time_iter)
 unsigned Model::getDefaultStencilSize() const
 {
     unsigned stencil_size = this->gradient->getDefaultStencilSize();
-    // Same thing for wilson loops when implemented and determine which ones are the largest.
+    unsigned wilson_loop_stencil_size = this->wilsonLoop->getDefaultStencilSize();
+
+    if (wilson_loop_stencil_size > stencil_size)
+        stencil_size = wilson_loop_stencil_size;
+
     return stencil_size;
 }
 

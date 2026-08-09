@@ -24,6 +24,11 @@ target_compile_definitions(Core PRIVATE
     SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
 )
 
+if (GFT_ENABLE_MPI)
+    target_compile_definitions(Core PRIVATE GFT_ENABLE_MPI)
+    target_link_libraries(Core PUBLIC MPI::MPI_CXX)
+endif()
+
 # -----------------------------
 # Header files set-up
 # -----------------------------
