@@ -32,6 +32,37 @@ private:
     // profile parameters or loaded data containers here as required.
     std::string scalarProfileDataFilename;
     std::string gaugeProfileDataFilename;
+    std::string sorProfileDataFilename;
+
+    double monopole1X;
+    double monopole1Y;
+    double monopole1Z;
+    
+    double monopole2X;
+    double monopole2Y;
+    double monopole2Z;
+
+    double WInfAmp;
+    double VInfAmp;
+
+    double gamma1;
+    double gamma2;
+
+    double g;
+    double gpp;
+    
+    double monopoleGridSpacing;
+ 
+
+
+
+    
+    std::vector<double> k;
+    std::vector<double> kPrime;
+    std::vector<double> hW;
+    std::vector<double> hV;
+
+    
 
     ///////////////////////////////////////////////  Initialisers  ///////////////////////////////////////////////////
 
