@@ -5,6 +5,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <cmath>
+#include <complex>
 #include <vector>
 
 using namespace std;
@@ -57,10 +58,11 @@ static inline void build_u_matrices(
     double y_2,
     double z_2,
     double r_2,
-    double EPS,
     complex<double> u_1[2][2],
     complex<double> u_2[2][2]
 ) {
+    double EPS = 1e-8;
+
     if (fabs(z_1 - r_1) < EPS) {
         u_1[0][0] = complex<double>(1.0, 0.0);
         u_1[0][1] = complex<double>(0.0, 0.0);
@@ -117,12 +119,12 @@ static inline void build_u_matrices(
 namespace
 {
     void buildScalarField(
-        complex<double> u_1[2][2],
-        complex<double> u_2[2][2],
-        const double phi_both[4],
-        complex<double> (&phi)[4],
-        this->gamma1,
-        this->gamma2
+    complex<double> u_1[2][2],
+    complex<double> u_2[2][2],
+    const double phi_both[4],
+    complex<double> (&phi)[4],
+    double gamma1,
+    double gamma2
 ) {
     const double pi = 4.0 * atan(1.0);
     const double gamma_param_1 = gamma1 * pi;
@@ -213,67 +215,66 @@ namespace
 namespace
 {
     void buildGaugeFields(
-        double x_box,
-        double y_box,
-        double z_box,
-        double x1_box,
-        double y1_box,
-        double z1_box,
-        double x2_box,
-        double y2_box,
-        double z2_box,
-        double V_profile,
-        double W_profile,
-        double V_ai[3][3],
-        double W_ai[3][3])
-    {    
+    double x, double y, double z,
+    double x1, double y1, double z1,
+    double x2, double y2, double z2,
+    double gamma1, double gamma2,
+    double V_profile, double W_profile,
+    double g, double gpp,
+    double V_inf_amp, double W_inf_amp,
+    double V_ai[3][3], double W_ai[3][3])
+    {
         const double pi = 4.0 * atan(1.0);
-        double x_1 = x_box - x1_box;
-        double y_1 = y_box - y1_box;
-        double z_1 = z_box - z1_box;
-        double x_2 = x_box - x2_box;
-        double y_2 = y_box - y2_box;
-        double z_2 = z_box - z2_box;
-    
+        const double gamma_param_1 = gamma1 * pi;
+        const double gamma_param_2 = gamma2 * pi;
+
+        const double R_gamma1[3][3] = {
+            {cos(gamma_param_1),  sin(gamma_param_1), 0.0},
+            {-sin(gamma_param_1), cos(gamma_param_1), 0.0},
+            {0.0, 0.0, 1.0}
+        };
+
+        const double R_gamma2[3][3] = {
+            {cos(gamma_param_2),  sin(gamma_param_2), 0.0},
+            {-sin(gamma_param_2), cos(gamma_param_2), 0.0},
+            {0.0, 0.0, 1.0}
+        };
     
         const double EPS_LOCAL = 1.0e-12;
-    
-        double r_sq = x_box * x_box + y_box * y_box + z_box * z_box;
+        
+        double r_sq = x * x + y * y + z * z;
         if (r_sq < EPS_LOCAL * EPS_LOCAL) {
             r_sq = EPS_LOCAL * EPS_LOCAL;
         }
-        double r1_sq = x_1 * x_1 + y_1 * y_1 + z_1 * z_1;
+        double r1_sq = x1 * x1 + y1 * y1 + z1 * z1;
         if (r1_sq < EPS_LOCAL * EPS_LOCAL) {
             r1_sq = EPS_LOCAL * EPS_LOCAL;
         }
-        double r2_sq = x_2 * x_2 + y_2 * y_2 + z_2 * z_2;
+        double r2_sq = x2 * x2 + y2 * y2 + z2 * z2;
         if (r2_sq < EPS_LOCAL * EPS_LOCAL) {
             r2_sq = EPS_LOCAL * EPS_LOCAL;
         }
     
     
-        double rho_1 = hypot(x_1, y_1);
-        double rho_2 = hypot(x_2, y_2);
+        double rho_1 = hypot(x1, y1);
+        double rho_2 = hypot(x2, y2);
+
+        double phi1   = atan2(y1, x1);
     
-        double phi1   = atan2(y_1, x_1);
-    
-        double phi2   = atan2(y_2, x_2);
+        double phi2   = atan2(y2, x2);
     
         double sintheta1 = rho_1 / sqrt(r1_sq);
-        double costheta1 = z_1 / sqrt(r1_sq);
+        double costheta1 = z1 / sqrt(r1_sq);
         double sintheta2 = rho_2 / sqrt(r2_sq);
-        double costheta2 = z_2 / sqrt(r2_sq);
-        double tantheta1 = rho_1 / z_1;
-        double tantheta2 = rho_2 / z_2;
+        double costheta2 = z2 / sqrt(r2_sq);
+
+        double zhat[3] = {0.0, 0.0, 1.0};
+   
+        double halfsintheta1 = sqrt((sqrt(r1_sq) - z1) / (2 * sqrt(r1_sq)));
+        double halfsintheta2 = sqrt((sqrt(r2_sq) - z2) / (2 * sqrt(r2_sq)));
     
-        double halftantheta1 = rho_1 / (z_1 + sqrt(r1_sq));
-        double halftantheta2 = rho_2 / (z_2 + sqrt(r2_sq));
-    
-        double halfsintheta1 = sqrt((sqrt(r1_sq) - z_1) / (2 * sqrt(r1_sq)));
-        double halfsintheta2 = sqrt((sqrt(r2_sq) - z_2) / (2 * sqrt(r2_sq)));
-    
-        double halfcostheta1 = sqrt((sqrt(r1_sq) + z_1) / (2 * sqrt(r1_sq)));
-        double halfcostheta2 = sqrt((sqrt(r2_sq) + z_2) / (2 * sqrt(r2_sq)));
+        double halfcostheta1 = sqrt((sqrt(r1_sq) + z1) / (2 * sqrt(r1_sq)));
+        double halfcostheta2 = sqrt((sqrt(r2_sq) + z2) / (2 * sqrt(r2_sq)));
     
         double P[3][3] = {
             {1.0, 0.0, 0.0},
@@ -281,9 +282,7 @@ namespace
             {0.0, 0.0, 0.0}
         };
     
-        double xhat[3] = {1.0, 0.0, 0.0};
-        double yhat[3] = {0.0, 1.0, 0.0};
-        double zhat[3] = {0.0, 0.0, 1.0};
+   
     
     
     
@@ -329,8 +328,8 @@ namespace
             }
         }
     
-        double theta1 = atan2(rho_1, z_1);
-        double theta2 = atan2(rho_2, z_2);
+        double theta1 = atan2(rho_1, z1);
+        double theta2 = atan2(rho_2, z2);
     
         double sin_term = 0.0;
         if (abs(theta1) < 1e-7 && abs(theta2) < 1e-7) {
@@ -384,19 +383,44 @@ namespace
             {0.0, 0.0, 0.0}
         };
     
+
+        auto matMul3 = [](const double A[3][3], const double B[3][3], double out[3][3]) {
+        for (int r = 0; r < 3; ++r)
+            for (int c = 0; c < 3; ++c) {
+                out[r][c] = 0.0;
+                for (int k_idx = 0; k_idx < 3; ++k_idx)
+                    out[r][c] += A[r][k_idx] * B[k_idx][c];
+            }
+        };
+
+        double PR1[3][3], PR1M[3][3], X1[3][3]; // X1 = P * R_gamma1 * R_mbar * P
+        matMul3(P, R_gamma1, PR1);
+        matMul3(PR1, R_mbar, PR1M);
+        matMul3(PR1M, P, X1);
+
+        double PR2[3][3], PR2M[3][3], X2[3][3]; // X2 = P * R_gamma2 * R_mbar * P
+        matMul3(P, R_gamma2, PR2);
+        matMul3(PR2, R_mbar, PR2M);
+        matMul3(PR2M, P, X2);
+
+        for (int a_idx = 0; a_idx < 3; ++a_idx) {
+            for (int i_idx = 0; i_idx < 3; ++i_idx) {
+                S_H[a_idx][i_idx] = 0.0;
+                S_L[a_idx][i_idx] = 0.0;
+                for (int e_idx = 0; e_idx < 3; ++e_idx) {
+                    S_H[a_idx][i_idx] += (g / gpp) * L_ai_m[e_idx][i_idx] * X1[e_idx][a_idx];
+                    S_L[a_idx][i_idx] += L_ai_m[e_idx][i_idx] * X2[e_idx][a_idx];
+                }
+            }
+        }
+
+
         for (int a_idx = 0; a_idx < 3; ++a_idx) {
             for (int i_idx = 0; i_idx < 3; ++i_idx) {
                 for (int b_idx = 0; b_idx < 3; ++b_idx) {
                     Q_H[a_idx][i_idx] += (g / gpp) * P[a_idx][b_idx] * L_ai_mbar[b_idx][i_idx];
                     Q_L[a_idx][i_idx] += P[a_idx][b_idx] * L_ai_mbar[b_idx][i_idx];
-                    for (int c_idx = 0; c_idx < 3; ++c_idx) {
-                        for (int d_idx = 0; d_idx < 3; ++d_idx) {
-                            for (int e_idx = 0; e_idx < 3; ++e_idx) {
-                                S_H[a_idx][i_idx] += (g / gpp) * L_ai_m[e_idx][i_idx] * P[e_idx][d_idx] * R_gamma1[d_idx][c_idx] * R_mbar[c_idx][b_idx] * P[b_idx][a_idx];
-                                S_L[a_idx][i_idx] += L_ai_m[e_idx][i_idx] * P[e_idx][d_idx] * R_gamma2[d_idx][c_idx] * R_mbar[c_idx][b_idx] * P[b_idx][a_idx];
-                            }
-                        }
-                    }
+                    
     
                 }
             }
@@ -446,17 +470,23 @@ namespace
             {0.0, 0.0, 0.0},
             {0.0, 0.0, 0.0}
         };
-    
-        for (int a_idx = 0; a_idx < 3; ++a_idx) {
-            for (int b_idx = 0; b_idx < 3; ++b_idx) {
-                for (int c_idx = 0; c_idx < 3; ++c_idx) {
-                    for (int d_idx = 0; d_idx < 3; ++d_idx) {
-                        R_1[a_idx][b_idx] += R_m[a_idx][d_idx] * R_gamma1[d_idx][c_idx] * R_mbar[c_idx][b_idx];
-                        R_2[a_idx][b_idx] += R_m[a_idx][d_idx] * R_gamma2[d_idx][c_idx] * R_mbar[c_idx][b_idx];
-                    }
-                }
-            }
-        }
+
+        double Rm1[3][3], Rm2[3][3];
+        matMul3(R_m, R_gamma1, Rm1);
+        matMul3(Rm1, R_mbar, R_1);
+        matMul3(R_m, R_gamma2, Rm2);
+        matMul3(Rm2, R_mbar, R_2);
+            
+        // for (int a_idx = 0; a_idx < 3; ++a_idx) {
+        //     for (int b_idx = 0; b_idx < 3; ++b_idx) {
+        //         for (int c_idx = 0; c_idx < 3; ++c_idx) {
+        //             for (int d_idx = 0; d_idx < 3; ++d_idx) {
+        //                 R_1[a_idx][b_idx] += R_m[a_idx][d_idx] * R_gamma1[d_idx][c_idx] * R_mbar[c_idx][b_idx];
+        //                 R_2[a_idx][b_idx] += R_m[a_idx][d_idx] * R_gamma2[d_idx][c_idx] * R_mbar[c_idx][b_idx];
+        //             }
+        //         }
+        //     }
+        // }
     
     
         double V_local[3][3] = {
@@ -582,22 +612,10 @@ void UserDefinedProfile::configure(
 
     /*
      * Select the appropriate profile-data file according to the field type.
-     */
-    const std::string &selected_filename
-        = this->fieldType == FieldType::Scalar
-        ? this->scalarProfileDataFilename
-        : this->gaugeProfileDataFilename;
-
-    /*
-     * USER SECTION: OPTIONAL PROFILE-DATA LOADING
-     *
-     * If the profile uses a small tabulated data file, load it here once and
-     * store the resulting data in class members declared in the header.
-     */
-    if (selected_filename != "NONE")
+     */if (this->sorProfileDataFilename != "NONE")
     {
         const std::string data_path
-            = std::string(SOURCE_DIR) + "/" + selected_filename;
+            = std::string(SOURCE_DIR) + "/" + this->sorProfileDataFilename;
 
         std::ifstream profileFile(data_path);
 
@@ -615,9 +633,9 @@ void UserDefinedProfile::configure(
         double hVValue;
 
         while (profileFile >> kValue
-                           >> kPrimeValue
-                           >> hWValue
-                           >> hVValue)
+                        >> kPrimeValue
+                        >> hWValue
+                        >> hVValue)
         {
             this->k.push_back(kValue);
             this->kPrime.push_back(kPrimeValue);
@@ -675,16 +693,7 @@ UserDefinedProfile::UserDefinedProfile(
         true
     );
 
-    /*
-     * This warning is deliberately retained in the student template.
-     * Remove it once the corresponding profile has been implemented.
-     */
-    std::cout
-        << "INITIALCONDITIONS::USERDEFINEDPROFILE::WARNING: "
-        << "The supplied user-defined profile is a blank template.\n"
-        << "Representation-safe default field values will be retained "
-        << "until its profile functions are implemented.\n"
-        << std::endl;
+    
 }
 
 UserDefinedProfile::~UserDefinedProfile()
@@ -728,8 +737,8 @@ void UserDefinedProfile::setScalarProfile(
     const double r_1 = sqrt(x1 * x1 + y1 * y1 + z1 * z1);
     const double r_2 = sqrt(x2 * x2 + y2 * y2 + z2 * z2);
 
-    const double rPos1 = r_1 / monopole_grid_spacing;
-    const double rPos2 = r_2 / monopole_grid_spacing;
+    const double rPos1 = r_1 / this->monopoleGridSpacing;
+    const double rPos2 = r_2 / this->monopoleGridSpacing;
 
     const double k_1 = interpProfile(this->k, rPos1, 1.0);
     const double k_1_p = interpProfile(this->kPrime, rPos1, 0.0);
@@ -743,27 +752,25 @@ void UserDefinedProfile::setScalarProfile(
     const double g_2_p = (k_2 + k_2_p);
     const double g_2 = (k_2 - k_2_p);
 
-    double phi[8];
+    complex<double> phi[4];
 
     const double phi_both[4] = {(-g_1_p * g_2_p), (g_1 * g_2), (-g_1 * g_2), (g_1_p * g_2_p)};
 
     complex<double> u_1[2][2];
     complex<double> u_2[2][2];
-    build_u_matrices(x1, y1, z1, r_1, x2, y2, z2, r_2, EPS, u_1, u_2);
+    build_u_matrices(x1, y1, z1, r_1, x2, y2, z2, r_2, u_1, u_2);
     
-    buildScalarField(
-        u_1,u_2,
-        phi_both,
-        phi
-    );
+    buildScalarField(u_1, u_2, phi_both, phi, this->gamma1, this->gamma2);
 
 
-    for (unsigned comp = 0; comp < num_components; ++comp)
+        
+    for (unsigned comp = 0; comp < 4U; ++comp)
     {
-        current_fields[comp] = static_cast<float>(phi[comp]);
-        previous_fields[comp] = current_fields[comp];
+        current_fields[2*comp]     = static_cast<float>(phi[comp].real());
+        current_fields[2*comp + 1] = static_cast<float>(phi[comp].imag());
+        previous_fields[2*comp]     = current_fields[2*comp];
+        previous_fields[2*comp + 1] = current_fields[2*comp + 1];
     }
-
      /*
      * 2. Evaluate an analytic profile, or interpolate data loaded once in
      *    configure().
@@ -856,13 +863,14 @@ void UserDefinedProfile::setGaugeProfile(
     const double y2 = y - this->monopole2Y;
     const double z2 = z - this->monopole2Z;
 
+    
+    const double r_1 = sqrt(x1 * x1 + y1 * y1 + z1 * z1);
+    const double r_2 = sqrt(x2 * x2 + y2 * y2 + z2 * z2);
 
-    // 3. Calculate interpolated W and V radial profiles
-    const double r1 = ...;
-    const double r2 = ...;
 
-    const double rPos1 = r1 / this->monopoleGridSpacing;
-    const double rPos2 = r2 / this->monopoleGridSpacing;
+
+    const double rPos1 = r_1 / this->monopoleGridSpacing;
+    const double rPos2 = r_2 / this->monopoleGridSpacing;
 
     const double W1 = interpProfile(this->hW, rPos1, 1.0);
     const double W2 = interpProfile(this->hW, rPos2, 1.0);
@@ -879,16 +887,60 @@ void UserDefinedProfile::setGaugeProfile(
     double V_ai[3][3];
     double W_ai[3][3];
 
+
     buildGaugeFields(
-        x, y, z,
-        ...,
-        VProfile,
-        WProfile,
-        V_ai,
-        W_ai
+    x, y, z,
+    x1, y1, z1,
+    x2, y2, z2,
+    this->gamma1, this->gamma2,
+    VProfile, WProfile,
+    this->g, this->gpp,
+    this->VInfAmp, this->WInfAmp,
+    V_ai, W_ai
     );
 
 
+
+    double final_w_ai[3][3];
+    double final_v_ai[3][3];
+    double d_var[3] = {geometry.dx, geometry.dy, geometry.dz};
+    for (int i = 0; i < 3; i++)
+    {
+        for (int j = 0; j < 3; j++)
+        {
+            final_w_ai[i][j] = 1.0/2.0 * g * d_var[j] * W_ai[i][j];
+            final_v_ai[i][j] = 1.0/2.0 * gpp * d_var[j] * V_ai[i][j];
+        }
+    }
+
+    double final_y_ai[3]= {0.0, 0.0, 0.0};
+
+    const unsigned direction_width = num_components / 3U;
+
+    for (unsigned dir = 0; dir < 3; ++dir)
+    {
+        // Hypercharge U(1)
+        current_fields[dir * direction_width + 0] = final_y_ai[dir];
+
+        // SM SU(2)
+        for (unsigned a = 0; a < 3; ++a)
+            current_fields[dir * direction_width + 1 + a] = final_v_ai[a][dir];
+
+        // Higgs-family SU(2)
+        for (unsigned a = 0; a < 3; ++a)
+            current_fields[dir * direction_width + 4 + a] = final_w_ai[a][dir];
+    }
+
+
+
+    //     for (int i = 0; i < 3; ++i)
+    // {
+    //     for (int a = 0; a < 3; ++a)
+    //     {
+    //         current_fields[i * 3 + a]
+    //             = static_cast<float>(final_w_ai[a][i]);
+    //     }
+    // }
     // 5. Convert V_ai/W_ai into whatever
     //    GFTEvolver expects in current_fields[]
 
