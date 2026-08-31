@@ -451,6 +451,8 @@ void GaugeCondition::timestepAnalysis(const unsigned &time_step)
 
             if (ofs.is_open())
             {
+                ofs << time_step << " ";
+            
                 if (this->globalOptions[0])
                 {
                     for (unsigned eq_iter = 0;

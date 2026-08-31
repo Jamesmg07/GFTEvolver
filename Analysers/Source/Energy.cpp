@@ -2,6 +2,9 @@
 
 #include <filesystem>
 #include <stdexcept>
+#include <algorithm>
+#include <cmath>
+#include <limits>
 
 #ifdef GFT_ENABLE_MPI
 #include <mpi.h>
@@ -52,9 +55,38 @@ void Energy::configure(const std::string path, const bool debug)
         }
         std::getline(ifs, description, ':');
         ifs >> this->localFrequency;
+
+        // Load in monopole maximum-position output path
+        std::getline(ifs, description);
+        std::getline(ifs, description, ':');
+        ifs >> this->monoSeparationEnabled;
+        
+        std::getline(ifs, description, ':');
+        ifs >> this->monoSeparationPath;
+
+        // Load in monopole maximum-position output frequency
+        std::getline(ifs, description, ':');
+        ifs >> this->monoSeparationFrequency;
+
+        // Load in minimum physical monopole separation
+        std::getline(ifs, description, ':');
+        ifs >> this->monoMinimumSeparation;
+
     } 
 
     ifs.close();
+
+
+
+    if (this->rank == 0)
+    {
+        std::ofstream ofs(
+            std::string(DATA_DIR)
+            + "/"
+            + this->monoSeparationPath);
+
+        ofs.close();
+    }
 
     // Start a fresh file
     if (this->anyGlobalOptions && this->rank == 0)
@@ -87,15 +119,42 @@ void Energy::initVariables(const long long unsigned grid_size)
     this->magnetic = 0.f;
     this->electric = 0.f;
 
-    for (unsigned iter = 0; iter < this->numLocalOptions; iter++)
+    // Allocate energy density if either:
+    // 1. local energy-density output is enabled, or
+    // 2. monopole tracking is enabled.
+    //
+    // Monopole tracking needs the total energy density even when
+    // local energy-density output is disabled.
+    if (this->localOptions[0] ||
+        this->monoSeparationEnabled)
+    {
+        this->energyDensity.resize(grid_size, 0.f);
+    }
+
+    // The remaining local density arrays are only needed when
+    // their corresponding local output is enabled.
+    for (unsigned iter = 1;
+        iter < this->numLocalOptions;
+        iter++)
     {
         if (this->localOptions[iter])
-            this->densityPointers[iter]->resize(grid_size, 0.f);
+        {
+            this->densityPointers[iter]->resize(
+                grid_size,
+                0.f);
+        }
     }
 
     this->counter = 0;
+  
+
     this->globalOutput = this->anyGlobalOptions;
     this->localOutput = this->anyLocalOptions;
+
+    this->monoSeparationOutput =
+    this->monoSeparationEnabled &&
+    this->counter % this->monoSeparationFrequency == 0;
+
 }
 
 std::string Energy::rankLocalPath(
@@ -299,27 +358,26 @@ void Energy::mergeRankLocalOutput(
     }
 }
 
-///////////////////////////////////  Constructors/Destructors  //////////////////////////////////////////////
 
+
+///////////////////////////////////  Constructors/Destructors  //////////////////////////////////////////////
 Energy::Energy(const Model &model,
-               const double &dx,
-               const double &dy,
-               const double &dz,
+               const double &dx, const double &dy, const double &dz,
                const long long unsigned grid_size,
                const long long unsigned owned_site_begin,
                const long long unsigned owned_site_end,
-               const int rank,
-               const int num_ranks)
-    : model(model),
-      energyPointers{&this->energy, &this->potential, &this->gradient,
+               const int rank, const int num_ranks,
+               const unsigned nx, const unsigned ny, const unsigned nz,
+               const unsigned global_x_start)
+    : model(model), energyPointers{&this->energy, &this->potential, &this->gradient,
                      &this->kinetic, &this->magnetic, &this->electric},
       densityPointers{&this->energyDensity, &this->potentialDensity,
                       &this->gradientDensity, &this->kineticDensity,
                       &this->magneticDensity, &this->electricDensity},
       dx(dx), dy(dy), dz(dz),
-        rank(rank), numRanks(num_ranks),
-        ownedSiteBegin(owned_site_begin),
-        ownedSiteEnd(owned_site_end)
+      rank(rank), numRanks(num_ranks),
+      ownedSiteBegin(owned_site_begin), ownedSiteEnd(owned_site_end),
+      nx(nx), ny(ny), nz(nz), globalXStart(global_x_start)
 {
     this->configure(
         std::string(SOURCE_DIR) + "/Config/Energy.cfg",
@@ -336,17 +394,28 @@ Energy::~Energy()
 
 void Energy::initialAnalysis()
 {
-    this->model.energyPreparation(this->globalOutput || this->localOutput);
+    this->model.energyPreparation(
+        this->globalOutput ||
+        this->localOutput ||
+        this->monoSeparationOutput);
 }
 
+
+
+
 void Energy::preEvolveLocationAnalysis(const long long unsigned index,
-                                       const float* const local_scalar_pointers[2], const std::vector<std::vector<const float*>> &scalar_pointers,
-                                       const float* const local_vector_pointers[2], const std::vector<std::vector<const float*>> &vector_pointers)
+                                        const float* const local_scalar_pointers[2],
+                                        const std::vector<std::vector<const float*>> &scalar_pointers,
+                                        const float* const local_vector_pointers[2],
+                                        const std::vector<std::vector<const float*>> &vector_pointers)
 {
-    if (this->localOutput || this->globalOutput)
+
+    
+    if (this->localOutput ||
+        this->globalOutput ||
+        this->monoSeparationOutput)
     {
-
-
+    
 
         float potential_density = this->model.calcPotentialEnergy(local_scalar_pointers[1]);
         float gradient_density = this->model.calcGradientEnergy(scalar_pointers, vector_pointers);
@@ -355,6 +424,14 @@ void Energy::preEvolveLocationAnalysis(const long long unsigned index,
         float electric_density = this->model.calcElectricEnergy(local_vector_pointers);
 
         float energy_density = potential_density + gradient_density + kinetic_density + magnetic_density + electric_density;
+
+        // Always store total energy density when maxima analysis
+        // is enabled, even if local output is disabled.
+        if (this->localOptions[0] ||
+    this->monoSeparationOutput)
+        {
+            this->energyDensity[index] = energy_density;
+        }
 
         // So I can loop over output choices and/or contributions to the integrated quantities.
         const float* const density_pointers[this->numLocalOptions] = {&energy_density, &potential_density, &gradient_density, &kinetic_density,
@@ -393,6 +470,161 @@ void Energy::postEvolveLocationAnalysis(const unsigned &t_now, const long long u
 
 void Energy::timestepAnalysis(const unsigned &time_step)
 {
+    ////////////////////////////////////////////////////////////////
+    // Find the two strongest local maxima of the 3D energy density
+    ////////////////////////////////////////////////////////////////
+
+    if (this->monoSeparationOutput)
+    {
+        struct Candidate { float value; unsigned long long x, y, z; };
+
+        const unsigned long long planeSize = 1ULL*this->ny*this->nz;
+        const unsigned long long ownedXBeginLocal = this->ownedSiteBegin / planeSize;
+        const unsigned long long ownedXEndLocal   = this->ownedSiteEnd   / planeSize;
+
+        auto flatIndex = [this](unsigned long long xl, unsigned long long y, unsigned long long z)
+        { return (xl*this->ny + y)*this->nz + z; };
+
+        std::vector<Candidate> localCandidates;
+
+        for (unsigned long long xl = ownedXBeginLocal; xl < ownedXEndLocal; xl++)
+        {
+            const unsigned long long gx = this->globalXStart + (xl - ownedXBeginLocal);
+            if (gx == 0 || gx == this->nx - 1) continue;
+
+            for (unsigned long long y = 1; y < this->ny - 1; y++)
+            for (unsigned long long z = 1; z < this->nz - 1; z++)
+            {
+                const unsigned long long idx = flatIndex(xl, y, z);
+                const float value = this->energyDensity[idx];
+                bool isMax = true;
+
+                for (int ddx = -1; ddx <= 1 && isMax; ddx++)
+                for (int ddy = -1; ddy <= 1 && isMax; ddy++)
+                for (int ddz = -1; ddz <= 1; ddz++)
+                {
+                    if (!ddx && !ddy && !ddz) continue;
+                    if (this->energyDensity[flatIndex(xl+ddx, y+ddy, z+ddz)] > value)
+                    { isMax = false; break; }
+                }
+                if (isMax) localCandidates.push_back({value, gx, y, z});
+            }
+        }
+
+        // --- Assemble every rank's candidates on rank 0 ---
+        std::vector<Candidate> all;
+
+        if (this->numRanks == 1)
+        {
+            all = localCandidates;
+        }
+        else
+        {
+#ifndef GFT_ENABLE_MPI
+
+            throw std::runtime_error(
+                "ANALYSERS::ENERGY:: Multi-rank monopole tracking "
+                "requires an MPI build."
+            );
+
+#else
+
+            int localCount = static_cast<int>(localCandidates.size());
+            std::vector<int> counts(this->rank == 0 ? this->numRanks : 0);
+
+            if (MPI_Gather(&localCount, 1, MPI_INT,
+                    this->rank == 0 ? counts.data() : nullptr,
+                    1, MPI_INT, 0, MPI_COMM_WORLD) != MPI_SUCCESS)
+            {
+                throw std::runtime_error(
+                    "ANALYSERS::ENERGY:: MPI candidate-count gather failed."
+                );
+            }
+
+            std::vector<int> displs;
+            if (this->rank == 0)
+            {
+                displs.resize(this->numRanks);
+                int running = 0;
+                for (int r = 0; r < this->numRanks; r++) { displs[r] = running; running += counts[r]; }
+                all.resize(running);
+            }
+
+            MPI_Datatype candType;
+            MPI_Type_contiguous(sizeof(Candidate), MPI_BYTE, &candType);
+            MPI_Type_commit(&candType);
+
+            const int gatherv_error = MPI_Gatherv(
+                localCandidates.data(), localCount, candType,
+                this->rank == 0 ? all.data() : nullptr,
+                this->rank == 0 ? counts.data() : nullptr,
+                this->rank == 0 ? displs.data() : nullptr,
+                candType, 0, MPI_COMM_WORLD);
+
+            MPI_Type_free(&candType);
+
+            if (gatherv_error != MPI_SUCCESS)
+            {
+                throw std::runtime_error(
+                    "ANALYSERS::ENERGY:: MPI candidate gather failed."
+                );
+            }
+
+#endif
+        }
+
+        if (this->rank == 0)
+        {
+            auto worse = [](const Candidate &a, const Candidate &b)
+            {
+                if (a.value != b.value) return a.value < b.value;
+                if (a.x != b.x) return a.x > b.x;
+                if (a.y != b.y) return a.y > b.y;
+                return a.z > b.z;
+            };
+
+            Candidate first{-std::numeric_limits<float>::infinity(), 0, 0, 0};
+            for (auto &c : all) if (worse(first, c)) first = c;
+            const bool firstFound = first.value > -std::numeric_limits<float>::infinity();
+
+            Candidate second{-std::numeric_limits<float>::infinity(), 0, 0, 0};
+            if (firstFound)
+            {
+                const double minSepSq = this->monoMinimumSeparation * this->monoMinimumSeparation;
+                for (auto &c : all)
+                {
+                    if (c.x == first.x && c.y == first.y && c.z == first.z) continue;
+                    const double ddx = (double(c.x) - double(first.x)) * this->dx;
+                    const double ddy = (double(c.y) - double(first.y)) * this->dy;
+                    const double ddz = (double(c.z) - double(first.z)) * this->dz;
+                    if (ddx*ddx + ddy*ddy + ddz*ddz < minSepSq) continue;
+                    if (worse(second, c)) second = c;
+                }
+            }
+            const bool secondFound = second.value > -std::numeric_limits<float>::infinity();
+
+            std::ofstream ofs(std::string(DATA_DIR) + "/" + this->monoSeparationPath, std::ios::app);
+            if (ofs.is_open())
+            {
+                if (firstFound)
+                {
+                    ofs << time_step << " "
+                        << first.x*this->dx << " " << first.y*this->dy << " " << first.z*this->dz << " "
+                        << first.value << " ";
+                    if (secondFound)
+                        ofs << second.x*this->dx << " " << second.y*this->dy << " " << second.z*this->dz << " " << second.value;
+                    else
+                        ofs << "nan nan nan nan";
+                }
+                else
+                {
+                    ofs << time_step << " nan nan nan nan nan nan nan nan";
+                }
+                ofs << "\n";
+            }
+        }
+    }
+
     if (this->globalOutput)
     {
         std::vector<float> local_quantities(
@@ -415,14 +647,14 @@ void Energy::timestepAnalysis(const unsigned &time_step)
         }
         else
         {
-    #ifndef GFT_ENABLE_MPI
+#ifndef GFT_ENABLE_MPI
 
             throw std::runtime_error(
                 "ANALYSERS::ENERGY:: Multi-rank reduction "
                 "requires an MPI build."
             );
 
-    #else
+#else
 
             const int reduce_error = MPI_Reduce(
                 local_quantities.data(),
@@ -441,7 +673,7 @@ void Energy::timestepAnalysis(const unsigned &time_step)
                 );
             }
 
-    #endif
+#endif
         }
 
         if (this->rank == 0)
@@ -454,6 +686,8 @@ void Energy::timestepAnalysis(const unsigned &time_step)
 
             if (ofs.is_open())
             {
+                ofs << time_step << " ";
+
                 for (unsigned iter = 0;
                     iter < this->numGlobalOptions;
                     iter++)
@@ -518,14 +752,26 @@ void Energy::timestepAnalysis(const unsigned &time_step)
         ofs.close();
     }
 
-    // Advance the counter no matter what
     this->counter++;
 
-    // Check if conditions for global and local output are satisfied
-    this->globalOutput = this->anyGlobalOptions && this->counter%this->globalFrequency == 0;
-    this->localOutput = this->anyLocalOptions && this->counter%this->localFrequency == 0;
+    // Check if conditions for global and local output are satisfied.
+    this->globalOutput =
+        this->anyGlobalOptions &&
+        this->counter % this->globalFrequency == 0;
 
-    this->model.energyPreparation(this->globalOutput || this->localOutput);
+    this->localOutput =
+        this->anyLocalOptions &&
+        this->counter % this->localFrequency == 0;
+
+    // Maximum-position analysis is independent of global/local output.
+    this->monoSeparationOutput =
+        this->monoSeparationEnabled &&
+        this->counter % this->monoSeparationFrequency == 0;
+
+    this->model.energyPreparation(
+        this->globalOutput ||
+        this->localOutput ||
+        this->monoSeparationOutput);
 }
 
 void Energy::finalAnalysis()

@@ -50,6 +50,15 @@ void OutputFields::configure(const std::string path, const bool debug)
         std::getline(ifs, description, ':');
         ifs >> this->finalAnalysisPath;
 
+        std::getline(ifs, description, ':');
+        ifs >> this->outputRMagnitudeEnabled;
+
+        std::getline(ifs, description, ':');
+        ifs >> this->RMagnitudeFrequency;
+
+        std::getline(ifs, description, ':');
+        ifs >> this->RMagnitudePath;
+
     } 
 
     ifs.close();
@@ -57,13 +66,18 @@ void OutputFields::configure(const std::string path, const bool debug)
     if (debug)
     {
         std::cout << "ANALYSERS::OUTPUTFIELDS::\n"
-                  << "Output both timesteps?: " << this->outputBothTimesteps << "\n"
-                  << "Output initial fields?: " << this->outputInitial << ", Output final fields?: " << this->outputFinal << "\n"
-                  << "Output continually?: " << this->outputContinual << ", Every " << this->outputFrequency << " timesteps.\n" 
-                  << "Initial analysis data path: Data/" << this->initialAnalysisPath << "\n"
-                  << "Continual analysis data path: Data/" << this->continualAnalysisPath << "\n"
-                  << "Final analysis data path: Data/" << this->finalAnalysisPath << "\n"
-                  << std::endl;
+          << "Output both timesteps?: " << this->outputBothTimesteps << "\n"
+          << "Output initial fields?: " << this->outputInitial
+          << ", Output final fields?: " << this->outputFinal << "\n"
+          << "Output continually?: " << this->outputContinual
+          << ", Every " << this->outputFrequency << " timesteps.\n"
+          << "Initial analysis data path: Data/" << this->initialAnalysisPath << "\n"
+          << "Continual analysis data path: Data/" << this->continualAnalysisPath << "\n"
+          << "Final analysis data path: Data/" << this->finalAnalysisPath << "\n"
+          << "Output R magnitude?: " << this->outputRMagnitudeEnabled
+          << ", Every " << this->RMagnitudeFrequency << " timesteps.\n"
+          << "R magnitude data path: Data/" << this->RMagnitudePath << "\n"
+          << std::endl;
     }
 }
 
@@ -274,6 +288,116 @@ void OutputFields::mergeRankOutput(
     }
 }
 
+void OutputFields::mergeRMagnitudeOutput(
+    const std::string &path) const
+{
+    namespace fs = std::filesystem;
+
+    if (this->numRanks == 1)
+        return;
+
+    const fs::path output_path =
+        fs::path(DATA_DIR) / path;
+
+    const fs::path temporary_path =
+        fs::path(output_path.string() + ".merge_tmp");
+
+    std::vector<fs::path> rank_paths;
+    rank_paths.reserve(
+        static_cast<std::size_t>(this->numRanks));
+
+    // Find every rank-local R^2 file.
+    for (int file_rank = 0;
+         file_rank < this->numRanks;
+         file_rank++)
+    {
+        const fs::path rank_path =
+            fs::path(DATA_DIR)
+            / this->rankLocalPath(path, file_rank);
+
+        if (!fs::exists(rank_path))
+        {
+            throw std::runtime_error(
+                "ANALYSERS::OUTPUTFIELDS:: Missing rank-local "
+                "R magnitude file: "
+                + rank_path.string()
+            );
+        }
+
+        rank_paths.push_back(rank_path);
+    }
+
+    std::ofstream merged(
+        temporary_path,
+        std::ios::binary | std::ios::trunc);
+
+    if (!merged.is_open())
+    {
+        throw std::runtime_error(
+            "ANALYSERS::OUTPUTFIELDS:: Could not create merged "
+            "R magnitude file: "
+            + temporary_path.string()
+        );
+    }
+
+    // Each R^2 file contains exactly one value per owned site.
+    // Therefore simply concatenate the rank files in rank order.
+    for (const fs::path &rank_path : rank_paths)
+    {
+        std::ifstream rank_file(
+            rank_path,
+            std::ios::binary);
+
+        if (!rank_file.is_open())
+        {
+            throw std::runtime_error(
+                "ANALYSERS::OUTPUTFIELDS:: Could not read "
+                "rank-local R magnitude file: "
+                + rank_path.string()
+            );
+        }
+
+        merged << rank_file.rdbuf();
+
+        if (rank_file.bad() || !merged)
+        {
+            throw std::runtime_error(
+                "ANALYSERS::OUTPUTFIELDS:: Failed while merging "
+                "R magnitude output."
+            );
+        }
+    }
+
+    merged.close();
+
+    if (!merged)
+    {
+        throw std::runtime_error(
+            "ANALYSERS::OUTPUTFIELDS:: Failed to complete merged "
+            "R magnitude file."
+        );
+    }
+
+    // Only replace the final file once the merge is complete.
+    if (fs::exists(output_path))
+        fs::remove(output_path);
+
+    fs::rename(temporary_path, output_path);
+
+    // Remove rank-local files after successful merge.
+    for (const fs::path &rank_path : rank_paths)
+    {
+        if (!fs::remove(rank_path))
+        {
+            throw std::runtime_error(
+                "ANALYSERS::OUTPUTFIELDS:: Could not remove merged "
+                "R magnitude rank-local file: "
+                + rank_path.string()
+            );
+        }
+    }
+}
+
 
 void OutputFields::outputFields(const std::string &path,
                                 const unsigned &time_step) const
@@ -345,7 +469,118 @@ void OutputFields::outputFields(const std::string &path,
 }
 
 
+void OutputFields::outputRMagnitude(
+    const std::string &path,
+    const unsigned &time_step) const
+{
+    std::ofstream ofs(
+        std::string(DATA_DIR) + "/" +
+        this->rankLocalPath(path, this->rank));
 
+    if (!ofs.is_open())
+    {
+        throw std::runtime_error(
+            "ANALYSERS::OUTPUTFIELDS:: Could not open R magnitude output file: "
+            + std::string(DATA_DIR) + "/" +
+            this->rankLocalPath(path, this->rank)
+        );
+    }
+
+    // Use the same timestep convention as outputFields().
+    const unsigned time_index =
+        (time_step + 1) % 2;
+
+    const unsigned long long scalar_time_offset =
+        1ULL * time_index
+        * this->storageVolume
+        * this->numScalarComponents;
+
+    for (unsigned long long site_iter = this->ownedSiteBegin;
+         site_iter < this->ownedSiteEnd;
+         site_iter++)
+    {
+        const unsigned long long scalar_index =
+            scalar_time_offset
+            + site_iter * this->numScalarComponents;
+
+        // The eight real scalar fields:
+        //
+        // phi1 = (psi1 + i psi2, psi3 + i psi4)
+        // phi2 = (psi5 + i psi6, psi7 + i psi8)
+
+        const double psi1 =
+            this->scalarFields[scalar_index + 0];
+
+        const double psi2 =
+            this->scalarFields[scalar_index + 1];
+
+        const double psi3 =
+            this->scalarFields[scalar_index + 2];
+
+        const double psi4 =
+            this->scalarFields[scalar_index + 3];
+
+        const double psi5 =
+            this->scalarFields[scalar_index + 4];
+
+        const double psi6 =
+            this->scalarFields[scalar_index + 5];
+
+        const double psi7 =
+            this->scalarFields[scalar_index + 6];
+
+        const double psi8 =
+            this->scalarFields[scalar_index + 7];
+
+
+        ////////////////////////////////////////////////////////////////
+        // |phi1|^2 and |phi2|^2
+        ////////////////////////////////////////////////////////////////
+
+        const double phi1_norm_sq =
+              psi1*psi1 + psi2*psi2
+            + psi3*psi3 + psi4*psi4;
+
+        const double phi2_norm_sq =
+              psi5*psi5 + psi6*psi6
+            + psi7*psi7 + psi8*psi8;
+
+
+        ////////////////////////////////////////////////////////////////
+        // R^mu
+        ////////////////////////////////////////////////////////////////
+
+
+        const double R1 =
+            2.0 * (
+                  psi1*psi5 + psi2*psi6
+                + psi3*psi7 + psi4*psi8
+                );
+
+        const double R2 =
+            2.0 * (
+                  psi1*psi6 - psi2*psi5
+                + psi3*psi8 - psi4*psi7
+                );
+
+        const double R3 =
+            phi1_norm_sq - phi2_norm_sq;
+
+
+        ////////////////////////////////////////////////////////////////
+        // R^2
+        ////////////////////////////////////////////////////////////////
+
+        const double R_squared = R1*R1
+            + R2*R2
+            + R3*R3;
+
+
+        ofs << R_squared << "\n";
+    }
+
+    ofs.close();
+}
 
 
 ///////////////////////////////////////////////  Constructors/Destructors  //////////////////////////////////////////////////////
@@ -408,7 +643,7 @@ void OutputFields::timestepAnalysis(const unsigned &time_step)
     this->completedTimesteps = time_step + 1;
 
     if (this->outputContinual
-        && this->completedTimesteps%this->outputFrequency == 0)
+        && this->completedTimesteps % this->outputFrequency == 0)
     {
         this->outputFields(
             this->continualAnalysisPath
@@ -417,6 +652,54 @@ void OutputFields::timestepAnalysis(const unsigned &time_step)
                 + ".dat",
             this->completedTimesteps);
     }
+
+    if (this->outputRMagnitudeEnabled
+    && this->completedTimesteps % this->RMagnitudeFrequency == 0)
+{
+    const std::string r_magnitude_path =
+        this->RMagnitudePath.substr(
+            0,
+            this->RMagnitudePath.find_last_of('.'))
+        + "_"
+        + std::to_string(this->completedTimesteps)
+        + ".dat";
+
+    // Every rank calculates and writes its own R^2 values.
+    this->outputRMagnitude(
+        r_magnitude_path,
+        this->completedTimesteps);
+
+#ifdef GFT_ENABLE_MPI
+
+    // Make sure every rank has finished writing before rank 0
+    // attempts to read the rank-local files.
+    if (MPI_Barrier(MPI_COMM_WORLD) != MPI_SUCCESS)
+    {
+        throw std::runtime_error(
+            "ANALYSERS::OUTPUTFIELDS:: MPI barrier failed "
+            "before R magnitude merge."
+        );
+    }
+
+    // Rank 0 reconstructs the global file.
+    if (this->rank == 0)
+    {
+        this->mergeRMagnitudeOutput(
+            r_magnitude_path);
+    }
+
+    // Do not let the other ranks continue until the merge is
+    // completely finished.
+    if (MPI_Barrier(MPI_COMM_WORLD) != MPI_SUCCESS)
+    {
+        throw std::runtime_error(
+            "ANALYSERS::OUTPUTFIELDS:: MPI barrier failed "
+            "after R magnitude merge."
+        );
+    }
+
+#endif
+}
 }
 
 void OutputFields::finalAnalysis()

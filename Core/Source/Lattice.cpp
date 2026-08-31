@@ -291,15 +291,13 @@ void Lattice::initAnalysers(const std::vector<bool> &analysis_choices)
     if (analysis_choices[1])
         this->analysers.push_back(
             new Energy(
-            this->model,
-            this->dx,
-            this->dy,
-            this->dz,
-            1ULL*this->storageNx*this->ny*this->nz,
-            1ULL*this->ownedXBegin*this->ny*this->nz,
-            1ULL*this->ownedXEnd*this->ny*this->nz,
-            this->rank,
-            this->numRanks)
+                this->model, this->dx, this->dy, this->dz,
+                1ULL*this->storageNx*this->ny*this->nz,
+                1ULL*this->ownedXBegin*this->ny*this->nz,
+                1ULL*this->ownedXEnd*this->ny*this->nz,
+                this->rank, this->numRanks,
+                this->nx, this->ny, this->nz,
+                this->globalXStart)
         );
 
     if (analysis_choices[2])

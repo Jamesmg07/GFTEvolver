@@ -2,6 +2,7 @@
 
 #include "Analyser.hpp"
 #include "Model.hpp"
+#include <array>
 
 class Energy
     : public Analyser
@@ -26,6 +27,8 @@ private:
 
     const double &dx, &dy, &dz;
     int rank, numRanks;
+    unsigned nx, ny, nz;      // GLOBAL lattice dimensions
+    unsigned globalXStart;    // this rank's offset into the global x-axis
 
     bool globalOptions[numGlobalOptions], localOptions[numLocalOptions], anyLocalOptions, anyGlobalOptions;
     unsigned globalFrequency, localFrequency, counter;
@@ -33,6 +36,14 @@ private:
     long long unsigned ownedSiteBegin, ownedSiteEnd;
 
     std::string globalQuantitiesPath, localQuantitiesPath;
+
+    bool monoSeparationEnabled;
+    std::string monoSeparationPath;
+    unsigned monoSeparationFrequency;
+    double monoMinimumSeparation;
+    bool monoSeparationOutput;
+
+    
 
     ///////////////////////////////////////////////////////  Initialisers  /////////////////////////////////////////////////////////////////////
 
@@ -67,14 +78,18 @@ public:
     //////////////////////////////////////////////////  Constructors/Destructors  //////////////////////////////////////////////////////////////
 
     Energy(const Model &model,
-       const double &dx,
-       const double &dy,
-       const double &dz,
-       const long long unsigned grid_size,
-       const long long unsigned owned_site_begin,
-       const long long unsigned owned_site_end,
-       const int rank,
-       const int num_ranks);
+    const double &dx,
+    const double &dy,
+    const double &dz,
+    const long long unsigned grid_size,
+    const long long unsigned owned_site_begin,
+    const long long unsigned owned_site_end,
+    const int rank,
+    const int num_ranks,
+    const unsigned nx,
+    const unsigned ny,
+    const unsigned nz, 
+    const unsigned global_x_start);
     virtual ~Energy();
 
     //////////////////////////////////////////////////////  Public Functions  //////////////////////////////////////////////////////////////////

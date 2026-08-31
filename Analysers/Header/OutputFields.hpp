@@ -22,6 +22,10 @@ private:
     long long unsigned storageVolume, ownedSiteBegin, ownedSiteEnd;
     int rank, numRanks;
 
+    bool outputRMagnitudeEnabled;
+    unsigned RMagnitudeFrequency;
+    std::string RMagnitudePath;
+
     //////////////////////////////////////////////////  Initialisers  ///////////////////////////////////////////////////////
 
     /*
@@ -54,6 +58,11 @@ private:
     */
     void outputFields(const std::string &path,
                     const unsigned &time_step) const;
+
+    void outputRMagnitude(const std::string &path,
+                      const unsigned &time_step) const;
+
+    void mergeRMagnitudeOutput(const std::string &path) const;
 
 
 public:
