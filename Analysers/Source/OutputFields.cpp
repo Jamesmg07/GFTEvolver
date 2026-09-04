@@ -168,28 +168,43 @@ void OutputFields::mergeRankOutput(
 
     if (!this->outputBothTimesteps)
     {
-        // With one stored timestep, rank order is already global x order.
         for (const fs::path &rank_path : rank_paths)
+{
+    std::ifstream rank_file(rank_path);
+
+    if (!rank_file.is_open())
+    {
+        throw std::runtime_error(
+            "ANALYSERS::OUTPUTFIELDS:: Could not read "
+            "rank-local R magnitude file: "
+            + rank_path.string()
+        );
+    }
+
+    std::string line;
+
+    while (std::getline(rank_file, line))
+    {
+        merged << line << '\n';
+
+        if (!merged)
         {
-            std::ifstream rank_file(rank_path, std::ios::binary);
-
-            if (!rank_file.is_open())
-            {
-                throw std::runtime_error(
-                    "ANALYSERS::OUTPUTFIELDS:: Could not read rank-local field file: "
-                    + rank_path.string()
-                );
-            }
-
-            merged << rank_file.rdbuf();
-
-            if (rank_file.bad() || !merged)
-            {
-                throw std::runtime_error(
-                    "ANALYSERS::OUTPUTFIELDS:: Failed while merging field output."
-                );
-            }
+            throw std::runtime_error(
+                "ANALYSERS::OUTPUTFIELDS:: Failed writing "
+                "merged R magnitude output."
+            );
         }
+    }
+
+    if (rank_file.bad())
+    {
+        throw std::runtime_error(
+            "ANALYSERS::OUTPUTFIELDS:: Failed reading "
+            "rank-local R magnitude file: "
+            + rank_path.string()
+        );
+    }
+}
     }
     else
     {
@@ -327,6 +342,19 @@ void OutputFields::mergeRMagnitudeOutput(
         rank_paths.push_back(rank_path);
     }
 
+    for (const fs::path &rank_path : rank_paths)
+    {
+        const auto file_size = fs::file_size(rank_path);
+        std::cerr << "ANALYSERS::OUTPUTFIELDS:: rank-local file "
+                  << rank_path.string() << " size = " << file_size << " bytes\n";
+
+        if (file_size == 0)
+        {
+            std::cerr << "ANALYSERS::OUTPUTFIELDS:: WARNING - empty rank-local file: "
+                      << rank_path.string() << "\n";
+        }
+    }
+
     std::ofstream merged(
         temporary_path,
         std::ios::binary | std::ios::trunc);
@@ -357,15 +385,30 @@ void OutputFields::mergeRMagnitudeOutput(
             );
         }
 
-        merged << rank_file.rdbuf();
+               merged << rank_file.rdbuf();
 
-        if (rank_file.bad() || !merged)
+        if (rank_file.bad())
         {
             throw std::runtime_error(
                 "ANALYSERS::OUTPUTFIELDS:: Failed while merging "
                 "R magnitude output."
             );
         }
+
+        if (!merged && !merged.bad())
+        {
+            // A zero-length rdbuf insertion (empty rank file) legitimately
+            // sets failbit even though nothing went wrong; clear it.
+            merged.clear(merged.rdstate() & ~std::ios::failbit);
+        }
+    }
+
+    if (merged.bad())
+    {
+        throw std::runtime_error(
+            "ANALYSERS::OUTPUTFIELDS:: Failed while merging "
+            "R magnitude output."
+        );
     }
 
     merged.close();
@@ -577,11 +620,24 @@ void OutputFields::outputRMagnitude(
 
 
         ofs << R_squared << "\n";
+
+        if (!ofs)
+        {
+            throw std::runtime_error(
+                "ANALYSERS::OUTPUTFIELDS:: Failed writing R magnitude value "
+                "for site " + std::to_string(site_iter));
+        }
     }
 
     ofs.close();
-}
 
+    if (ofs.fail())
+    {
+        throw std::runtime_error(
+            "ANALYSERS::OUTPUTFIELDS:: Failed to close R magnitude output file."
+        );
+    }
+}
 
 ///////////////////////////////////////////////  Constructors/Destructors  //////////////////////////////////////////////////////
 
@@ -607,6 +663,8 @@ OutputFields::OutputFields(
       numRanks(num_ranks)
 {
     this->completedTimesteps = 0;
+
+
     this->configure(
         std::string(SOURCE_DIR) + "/Config/OutputFields.cfg",
         true);
@@ -623,6 +681,52 @@ void OutputFields::initialAnalysis()
     if (this->outputInitial)
     {
         this->outputFields(this->initialAnalysisPath, 0);
+    }
+
+    if (this->outputRMagnitudeEnabled)
+    {
+        const std::string r_magnitude_path =
+            this->RMagnitudePath.substr(
+                0,
+                this->RMagnitudePath.find_last_of('.'))
+            + "_0.dat";
+
+        // Every rank calculates and writes its own R^2 values,
+        // exactly as timestepAnalysis() does at later timesteps.
+        this->outputRMagnitude(
+            r_magnitude_path,
+            0);
+
+#ifdef GFT_ENABLE_MPI
+
+        // Make sure every rank has finished writing before rank 0
+        // attempts to read the rank-local files.
+        if (MPI_Barrier(MPI_COMM_WORLD) != MPI_SUCCESS)
+        {
+            throw std::runtime_error(
+                "ANALYSERS::OUTPUTFIELDS:: MPI barrier failed "
+                "before initial R magnitude merge."
+            );
+        }
+
+        // Rank 0 reconstructs the global file.
+        if (this->rank == 0)
+        {
+            this->mergeRMagnitudeOutput(
+                r_magnitude_path);
+        }
+
+        // Do not let the other ranks continue until the merge is
+        // completely finished.
+        if (MPI_Barrier(MPI_COMM_WORLD) != MPI_SUCCESS)
+        {
+            throw std::runtime_error(
+                "ANALYSERS::OUTPUTFIELDS:: MPI barrier failed "
+                "after initial R magnitude merge."
+            );
+        }
+
+#endif
     }
 }
 
