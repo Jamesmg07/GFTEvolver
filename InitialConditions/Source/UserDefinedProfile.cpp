@@ -924,11 +924,11 @@ void UserDefinedProfile::setGaugeProfile(
 
         // SM SU(2)
         for (unsigned a = 0; a < 3; ++a)
-            current_fields[dir * direction_width + 1 + a] = final_v_ai[a][dir];
+            current_fields[dir * direction_width + 1 + a] = -final_w_ai[a][dir];
 
         // Higgs-family SU(2)
         for (unsigned a = 0; a < 3; ++a)
-            current_fields[dir * direction_width + 4 + a] = final_w_ai[a][dir];
+            current_fields[dir * direction_width + 4 + a] = -final_v_ai[a][dir];
     }
 
 
